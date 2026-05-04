@@ -9,6 +9,7 @@ on:
       - 'gem/**/*.cpp'
       - 'gem/**/*.hpp'
       - '.github/workflows/ruby_tests.yml'
+      - 'CMakeLists.txt'
 
 jobs:
   test_api:

@@ -5,7 +5,7 @@ on:
     workflows:
       - "Linux Multi-Architecture Build"
       - "macOS aarch64 Build"
-      - ".github/workflows/windows.yml"
+      - "Windows Build"
     types: [completed]
     branches: [main]
 
