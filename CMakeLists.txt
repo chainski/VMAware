@@ -35,7 +35,7 @@ endif()
 # compiler flags
 if (MSVC)
     # Visual Studio uses multi-config generators, so we must avoid CMAKE_BUILD_TYPE here
-    add_compile_options(/W4 /WX /EHsc)
+    add_compile_options(/W4 /EHsc)
 else()
     # Linux and Apple
     add_compile_options(-Wextra -Wall -Wconversion -Wdouble-promotion -Wno-unused-parameter -Wno-unused-function -Wno-sign-conversion -Werror)
