@@ -1411,8 +1411,6 @@ int main(int argc, char* argv[]) {
     const VM::enum_flags all = (arg_bitset.test(ALL) ? VM::ALL : VM::NULL_ARG);
     const VM::enum_flags dynamic = (arg_bitset.test(DYNAMIC) ? VM::DYNAMIC : VM::NULL_ARG);
 
-    std::cout << "\n\n\n\nDYNAMIC: " << static_cast<u32>(dynamic) << "\n\n\n";
-
     if (returners > 0) { // at least one of the options are set
         if (returners > 1) { // more than 2 options are set
             std::cerr << "--stdout, --percent, --detect, --brand, --type, and --conclusion must NOT be a combination, choose only a single one\n";

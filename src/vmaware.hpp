@@ -4648,6 +4648,11 @@ public:
             merge(brand_enum::QEMU, brand_enum::KVM_HYPERV, brand_enum::QEMU_KVM_HYPERV);
             merge(brand_enum::QEMU_KVM, brand_enum::KVM_HYPERV, brand_enum::QEMU_KVM_HYPERV);
 
+            merge(brand_enum::HYPERV_VPC, brand_enum::KVM_HYPERV, brand_enum::KVM_HYPERV);
+            merge(brand_enum::HYPERV, brand_enum::KVM_HYPERV, brand_enum::KVM_HYPERV);
+            merge(brand_enum::HYPERV_VPC, brand_enum::QEMU_KVM_HYPERV, brand_enum::QEMU_KVM_HYPERV);
+            merge(brand_enum::HYPERV, brand_enum::QEMU_KVM_HYPERV, brand_enum::QEMU_KVM_HYPERV);
+
             triple_merge(brand_enum::QEMU, brand_enum::KVM, brand_enum::KVM_HYPERV, brand_enum::QEMU_KVM_HYPERV);
 
             merge(brand_enum::VMWARE, brand_enum::VMWARE_FUSION, brand_enum::VMWARE_FUSION);
@@ -5758,9 +5763,16 @@ public:
                 return result;
             };
 
-            bool is_intel = true;
-            if (!cpu::is_intel()) {
-                is_intel = false;
+            bool is_intel = cpu::is_intel();
+
+            if (is_intel) {
+                // SERIALIZE (CPUID leaf 7, subleaf 0, EDX bit 14) requires Ice Lake or newer.
+                // Older Intel CPUs in Azure/Hyper-V environments crash with STATUS_ILLEGAL_INSTRUCTION.
+                u32 l7_eax = 0, l7_ebx = 0, l7_ecx = 0, l7_edx = 0;
+                cpu::cpuid(l7_eax, l7_ebx, l7_ecx, l7_edx, 7, 0);
+                if (!(l7_edx & (1u << 14))) {
+                    is_intel = false;
+                }
             }
 
             const HANDLE current_thread = reinterpret_cast<HANDLE>(-2LL);
