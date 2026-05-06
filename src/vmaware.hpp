@@ -586,7 +586,7 @@ public:
         CUCKOO_PIPE,
         TRAP,
         UD,
-        BLOCKSTEP,
+        INTERRUPT_SHADOW,
         DBVM,
         KERNEL_OBJECTS,
         NVRAM,
@@ -10472,31 +10472,44 @@ public:
     /**
      * @brief Check if a hypervisor does not properly restore the interruptibility state after a VM-exit
      * @category Windows
-     * @implements VM::BLOCKSTEP
+     * @implements VM::INTERRUPT_SHADOW
      */
-    [[nodiscard]] static bool blockstep() {
-        volatile int saw_single_step = 0;
+    [[nodiscard]] static bool interrupt_shadow() {
+        volatile ULONG_PTR trap_ip = 0;
 
     #if (x86_32) && !(CLANG || GCC)
+        ULONG_PTR baremetal_target_ip = 0;
+
         __try {
             __asm {
+                mov dword ptr[baremetal_target_ip], offset baremetal_target // get exact baremetal trap target address dynamically
+                push ebx
+                xor eax, eax
+                mov ax, ss
                 pushfd
                 or dword ptr[esp], 0x100 // set TF
                 popfd
-                xor eax, eax
-                mov ax, ss 
                 mov ss, ax // this blocks any debug exception for exactly one instruction
                 cpuid
-                nop // TF's single-step should fire here on baremetal except on a few buggy processors
-                pushfd
-                and dword ptr[esp], 0xFFFFFEFF
-                popfd
+                baremetal_target :
+                pop ebx // baremetal delays the #DB until here due to shadow suppression
+                    nop
+                    pushfd
+                    and dword ptr[esp], 0xFFFFFEFF
+                    popfd
             }
         }
-        __except (GetExceptionCode() == EXCEPTION_SINGLE_STEP ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
-            saw_single_step = 1;
-        }
-        return (saw_single_step == 0);
+        __except (GetExceptionCode() == EXCEPTION_SINGLE_STEP ?
+            (
+                trap_ip = GetExceptionInformation()->ContextRecord->Eip,
+                GetExceptionInformation()->ContextRecord->EFlags &= ~0x100, // clear TF so execution resumes cleanly and stack restores
+                EXCEPTION_CONTINUE_EXECUTION
+            ) : EXCEPTION_CONTINUE_SEARCH) {}
+
+        // hypervisor is detected if the trap fired at any IP differing from the expected baremetal target
+        // OR if the single step exception never fired at all (trap_ip == 0)
+        return (trap_ip == 0 || trap_ip != baremetal_target_ip);
+
     #elif (x86_64) || ((x86_32) && (CLANG || GCC))
         const HMODULE ntdll = util::get_ntdll();
         if (!ntdll) return false;
@@ -10516,22 +10529,22 @@ public:
         if (!nt_alloc || !nt_protect || !nt_flush || !nt_free) return false;
 
         // these opcodes are byte-for-byte identical for both x86_32 and x86_64 architectures 
-        // like, 0x53 maps to push ebx in 32-bit and push rbx in 64-bit
+        // 0x53 maps to push ebx in 32-bit and push rbx in 64-bit
         static constexpr u8 blockstep_opcodes[] = {
-            0x53,                                     // push rbx/ebx (preserve non-volatile register against cpuid)
-            0x9C,                                     // pushfq/pushfd
-            0x81, 0x0C, 0x24, 0x00, 0x01, 0x00, 0x00, // or dword ptr [rsp/esp], 0x100
-            0x9D,                                     // popfq/popfd
-            0x31, 0xC0,                               // xor eax, eax
-            0x8C, 0xD0,                               // mov ax, ss
-            0x8E, 0xD0,                               // mov ss, ax
-            0x0F, 0xA2,                               // cpuid
-            0x90,                                     // nop
-            0x9C,                                     // pushfq/pushfd
-            0x81, 0x24, 0x24, 0xFF, 0xFE, 0xFF, 0xFF, // and dword ptr [rsp/esp], 0xFFFFFEFF
-            0x9D,                                     // popfq/popfd
-            0x5B,                                     // pop rbx/ebx
-            0xC3                                      // ret
+            0x53,                                     // 0:  push rbx/ebx (preserve non-volatile register)
+            0x31, 0xC0,                               // 1:  xor eax, eax
+            0x8C, 0xD0,                               // 3:  mov ax, ss
+            0x9C,                                     // 5:  pushfq/pushfd
+            0x81, 0x0C, 0x24, 0x00, 0x01, 0x00, 0x00, // 6:  or dword ptr [rsp/esp], 0x100
+            0x9D,                                     // 13: popfq/popfd
+            0x8E, 0xD0,                               // 14: mov ss, ax  <- shadow starts here
+            0x0F, 0xA2,                               // 16: cpuid       <- buggy hypervisor traps here
+            0x5B,                                     // 18: pop rbx/ebx <- baremetal traps here
+            0x90,                                     // 19: nop         
+            0x9C,                                     // 20: pushfq/pushfd
+            0x81, 0x24, 0x24, 0xFF, 0xFE, 0xFF, 0xFF, // 21: and dword ptr [rsp/esp], 0xFFFFFEFF
+            0x9D,                                     // 28: popfq/popfd
+            0xC3                                      // 29: ret
         };
 
         const HANDLE current_process = reinterpret_cast<HANDLE>(-1LL);
@@ -10547,25 +10560,36 @@ public:
         ULONG old_protection = 0;
         NTSTATUS st = nt_protect(current_process, &base, &region_size, PAGE_EXECUTE_READ, &old_protection);
 
+        // expect the trap explicitly at offset +18 (pop rbx) because of shadow suppression on real hardware
+        const ULONG_PTR baremetal_target_ip = reinterpret_cast<ULONG_PTR>(base) + 18;
+
         if (NT_SUCCESS(st)) {
             nt_flush(current_process, base, region_size);
             __try {
                 reinterpret_cast<void(*)()>(base)();
             }
-            __except (GetExceptionCode() == EXCEPTION_SINGLE_STEP ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
-                saw_single_step = 1;
-            }
+            __except (GetExceptionCode() == EXCEPTION_SINGLE_STEP ?
+                (
+                #if (x86_64)
+                    trap_ip = GetExceptionInformation()->ContextRecord->Rip,
+                #else
+                    trap_ip = GetExceptionInformation()->ContextRecord->Eip,
+                #endif
+                    GetExceptionInformation()->ContextRecord->EFlags &= ~0x100, // to avoid infinite looping
+                    EXCEPTION_CONTINUE_EXECUTION 
+                ) : EXCEPTION_CONTINUE_SEARCH) {}
         }
 
         region_size = 0;
         nt_free(current_process, &base, &region_size, MEM_RELEASE);
 
-        return NT_SUCCESS(st) && (saw_single_step == 0);
+        // hypervisor is detected if execution trapped at any offset other than expected baremetal
+        // OR if the single step exception never fired at all (trap_ip == 0)
+        return NT_SUCCESS(st) && (trap_ip == 0 || trap_ip != baremetal_target_ip);
     #else
         return false;
     #endif
     }
-
 
     /**
      * @brief Check if Dark Byte's VM is present
@@ -13618,7 +13642,7 @@ public: // START OF PUBLIC FUNCTIONS
             case ACPI_SIGNATURE: return "ACPI_SIGNATURE";
             case TRAP: return "TRAP";
             case UD: return "UNDEFINED_INSTRUCTION";
-            case BLOCKSTEP: return "BLOCKSTEP";
+            case INTERRUPT_SHADOW: return "INTERRUPT_SHADOW";
             case DBVM: return "DBVM_HYPERCALL";
             case BOOT_LOGO: return "BOOT_LOGO";
             case MAC_SYS: return "MAC_SYS";
@@ -14176,7 +14200,7 @@ std::array<VM::core::technique, VM::enum_size + 1> VM::core::technique_table = [
             {VM::EIP_OVERFLOW, {100, VM::eip_overflow}},
             {VM::HYPERVISOR_HOOK, {100, VM::hypervisor_hook}},
             {VM::POPF, {100, VM::popf}},
-            {VM::BLOCKSTEP, {100, VM::blockstep}},
+            {VM::INTERRUPT_SHADOW, {100, VM::interrupt_shadow}},
             {VM::MSR, {100, VM::msr}},
             {VM::EDID, {100, VM::edid}},
             {VM::VIRTUAL_PROCESSORS, {100, VM::virtual_processors}},
