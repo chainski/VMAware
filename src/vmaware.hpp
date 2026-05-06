@@ -527,7 +527,6 @@ namespace brands { // TODO, remove this in the 2.8.0 or any release after the 2.
     LEGACY(NEKO_PROJECT, "Neko Project II");
     LEGACY(NOIRVISOR, "NoirVisor");
     LEGACY(QIHOO, "Qihoo 360 Sandbox");
-    LEGACY(NSJAIL, "nsjail");
     LEGACY(DBVM, "DBVM");
     LEGACY(UTM, "UTM");
     LEGACY(COMPAQ, "Compaq FX!32");
@@ -635,7 +634,7 @@ public:
         WSL_PROC,
         FILE_ACCESS_HISTORY,
         MAC,
-        NSJAIL_PID,
+        CONTAINER_PID,
         BLUESTACKS_FOLDERS,
         AMD_SEV_MSR,
         TEMPERATURE,
@@ -742,7 +741,6 @@ public:
         NEKO_PROJECT,
         NOIRVISOR,
         QIHOO,
-        NSJAIL,
         DBVM,
         UTM,
         COMPAQ,
@@ -4527,7 +4525,6 @@ public:
         static constexpr const char* NEKO_PROJECT = "Neko Project II";
         static constexpr const char* NOIRVISOR = "NoirVisor";
         static constexpr const char* QIHOO = "Qihoo 360 Sandbox";
-        static constexpr const char* NSJAIL = "nsjail";
         static constexpr const char* DBVM = "DBVM";
         static constexpr const char* UTM = "UTM";
         static constexpr const char* COMPAQ = "Compaq FX!32";
@@ -4758,7 +4755,6 @@ public:
                 case brand_enum::NEKO_PROJECT: return VM::brands::NEKO_PROJECT;
                 case brand_enum::NOIRVISOR: return VM::brands::NOIRVISOR;
                 case brand_enum::QIHOO: return VM::brands::QIHOO;
-                case brand_enum::NSJAIL: return VM::brands::NSJAIL;
                 case brand_enum::DBVM: return VM::brands::DBVM;
                 case brand_enum::UTM: return VM::brands::UTM;
                 case brand_enum::COMPAQ: return VM::brands::COMPAQ;
@@ -6909,11 +6905,11 @@ public:
 
 
     /**
-     * @brief Check if process status matches with nsjail patterns with PID anomalies
+     * @brief Check if process status matches with container patterns with PID anomalies
      * @category Linux
-     * @implements VM::NSJAIL_PID
+     * @implements VM::CONTAINER_PID
      */
-    [[nodiscard]] static bool nsjail_proc_id() {
+    [[nodiscard]] static bool container_proc_id() {
         std::ifstream status_file("/proc/self/status");
         if (!status_file.is_open()) {
             return false;
@@ -6952,7 +6948,7 @@ public:
             }
 
             if (pid_match && ppid_match) {
-                return core::add(brand_enum::NSJAIL);
+                return true;
             }
         }
 
@@ -13710,7 +13706,7 @@ public: // START OF PUBLIC FUNCTIONS
             case FIRMWARE: return "FIRMWARE";
             case FILE_ACCESS_HISTORY: return "FILE_ACCESS_HISTORY";
             case AUDIO: return "AUDIO";
-            case NSJAIL_PID: return "NSJAIL_PID";
+            case CONTAINER_PID: return "CONTAINER_PID";
             case DEVICES: return "DEVICES";
             case ACPI_SIGNATURE: return "ACPI_SIGNATURE";
             case TRAP: return "TRAP";
@@ -13927,7 +13923,6 @@ public: // START OF PUBLIC FUNCTIONS
             case brand_enum::AMD_SEV_ES: return "VM encryptor";
             case brand_enum::AMD_SEV_SNP: return "VM encryptor";
             case brand_enum::GCE: return "Cloud VM service";
-            case brand_enum::NSJAIL: return "Process isolator";
             case brand_enum::BAREVISOR: return "Hypervisor (type 1)";
             case brand_enum::HYPERPLATFORM: return "Hypervisor (type 1)";
             case brand_enum::MINIVISOR: return "Hypervisor (type 1)";
@@ -14002,7 +13997,6 @@ public: // START OF PUBLIC FUNCTIONS
                     (first_brand == brand_enum::AMD_SEV) ||
                     (first_brand == brand_enum::AMD_SEV_ES) ||
                     (first_brand == brand_enum::AMD_SEV_SNP) ||
-                    (first_brand == brand_enum::NSJAIL) ||
                     (first_brand == brand_enum::NULL_BRAND)
                 )
             ) {
@@ -14336,7 +14330,7 @@ std::array<VM::core::technique, VM::enum_size + 1> VM::core::technique_table = [
             {VM::WSL_PROC, {30, VM::wsl_proc_subdir}},
             {VM::FILE_ACCESS_HISTORY, {15, VM::file_access_history}},
             {VM::MAC, {20, VM::mac_address_check}},
-            {VM::NSJAIL_PID, {75, VM::nsjail_proc_id}},
+            {VM::CONTAINER_PID, {75, VM::container_proc_id}},
             {VM::BLUESTACKS_FOLDERS, {5, VM::bluestacks}},
             {VM::AMD_SEV_MSR, {50, VM::amd_sev_msr}},
             {VM::TEMPERATURE, {20, VM::temperature}},
