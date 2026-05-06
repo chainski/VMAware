@@ -596,7 +596,7 @@ public:
         MSR,
         KVM_INTERCEPTION,
         HYPERVISOR_HOOK,
-        POPF,
+        SINGLE_STEP,
         EIP_OVERFLOW,
 
         // Linux and Windows
@@ -12644,9 +12644,9 @@ public:
     /**
      * @brief Check whether a hypervisor delays trap flags over exiting instructions
      * @category Windows, x86
-     * @implements VM::POPF
+     * @implements VM::SINGLE_STEP
      */
-    [[nodiscard]] static bool popf() {
+    [[nodiscard]] static bool single_step() {
     #if (!x86)
         return false;
     #else
@@ -13654,7 +13654,7 @@ public: // START OF PUBLIC FUNCTIONS
             case MSR: return "MSR";
             case KVM_INTERCEPTION: return "KVM_INTERCEPTION";
             case HYPERVISOR_HOOK: return "BREAKPOINT";
-            case POPF: return "POPF";
+            case SINGLE_STEP: return "POPF";
             case EIP_OVERFLOW: return "EIP_OVERFLOW";
             // END OF TECHNIQUE LIST
             case DEFAULT: return "DEFAULT"; 
@@ -14189,31 +14189,31 @@ std::array<VM::core::technique, VM::enum_size + 1> VM::core::technique_table = [
         // START OF TECHNIQUE TABLE
         #if (WINDOWS)
             {VM::TRAP, {100, VM::trap}},
+            {VM::KVM_INTERCEPTION, {100, VM::kvm_interception}},
+            {VM::INTERRUPT_SHADOW, {100, VM::interrupt_shadow}},
+            {VM::EIP_OVERFLOW, {100, VM::eip_overflow}},
+            {VM::HYPERVISOR_HOOK, {100, VM::hypervisor_hook}},
+            {VM::SINGLE_STEP, {100, VM::single_step}},
             {VM::NVRAM, {100, VM::nvram}},
-            {VM::HYPERVISOR_QUERY, {100, VM::hypervisor_query}},
-            {VM::ACPI_SIGNATURE, {100, VM::acpi_signature}},
             {VM::CPU_HEURISTIC, {90, VM::cpu_heuristic}},
+            {VM::ACPI_SIGNATURE, {100, VM::acpi_signature}},
             {VM::CLOCK, {45, VM::clock}},
             {VM::POWER_CAPABILITIES, {25, VM::power_capabilities}},
             {VM::GPU_CAPABILITIES, {25, VM::gpu_capabilities}},
-            {VM::KVM_INTERCEPTION, {100, VM::kvm_interception}},
-            {VM::EIP_OVERFLOW, {100, VM::eip_overflow}},
-            {VM::HYPERVISOR_HOOK, {100, VM::hypervisor_hook}},
-            {VM::POPF, {100, VM::popf}},
-            {VM::INTERRUPT_SHADOW, {100, VM::interrupt_shadow}},
-            {VM::MSR, {100, VM::msr}},
             {VM::EDID, {100, VM::edid}},
+            {VM::MSR, {100, VM::msr}},
             {VM::VIRTUAL_PROCESSORS, {100, VM::virtual_processors}},
             {VM::WINE, {100, VM::wine}},
             {VM::DBVM, {150, VM::dbvm}},
+            {VM::UD, {100, VM::ud}},
             {VM::IVSHMEM, {100, VM::ivshmem}},
             {VM::DRIVERS, {100, VM::drivers}},
+            {VM::HYPERVISOR_QUERY, {100, VM::hypervisor_query}},
             {VM::HANDLES, {100, VM::device_handles}},
             {VM::KERNEL_OBJECTS, {100, VM::kernel_objects}},
+            {VM::DLL, {50, VM::dll}},
             {VM::AUDIO, {25, VM::audio}},
             {VM::DISPLAY, {25, VM::display}},
-            {VM::DLL, {50, VM::dll}},
-            {VM::UD, {100, VM::ud}},
             {VM::VMWARE_BACKDOOR, {100, VM::vmware_backdoor}},
             {VM::VIRTUAL_REGISTRY, {90, VM::virtual_registry}},
             {VM::MUTEX, {100, VM::mutex}},
