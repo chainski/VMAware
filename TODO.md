@@ -10,9 +10,11 @@
     - [ ] power_supply
 - [ ] check for presence of /dev/virtio-ports dir
 - [ ] add the library to conan.io 
-- [ ] add a reliable ci/cd for the debug binary
 - [ ] add an extra faq on ignoring false negatives and virtual devices on host 
 - [ ] research 86box and pcem detection vectors 
+- [ ] add a --disable arg to the cli
+- [ ] find out ways to redesign the settings
+- [ ] add a clang-tidy ci/cd
 
 # Distant plans
 - add a python version of the library (or any other lang for that matter)
