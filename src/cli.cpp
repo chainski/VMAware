@@ -988,7 +988,7 @@ static void general(
     checker(VM::ACPI_SIGNATURE, "ACPI device signatures");
     checker(VM::TRAP, "hypervisor interception");
     checker(VM::UD, "undefined exceptions");
-    checker(VM::BLOCKSTEP, "single step with trap flag");
+    checker(VM::INTERRUPT_SHADOW, "interrupt shadows");
     checker(VM::DBVM, "DBVM hypervisor");
     checker(VM::BOOT_LOGO, "boot logo");
     checker(VM::MAC_SYS, "system profiler");
