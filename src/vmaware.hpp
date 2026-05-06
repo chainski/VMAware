@@ -909,19 +909,19 @@ public:
             if (p_leaf < 0x40000000) {
                 // Standard range: 0x00000000 - 0x3FFFFFFF
                 cpu::cpuid(eax, unused, unused, unused, 0x00000000);
-                debug("CPUID: max standard leaf = ", eax);
+                debug("CPUID: max standard leaf = 0x", std::hex, eax);
                 supported = (p_leaf <= eax);
             }
             else if (p_leaf < 0x80000000) {
                 // Hypervisor range: 0x40000000 - 0x7FFFFFFF
                 cpu::cpuid(eax, unused, unused, unused, cpu::leaf::hypervisor);
-                debug("CPUID: max hypervisor leaf = ", eax);
+                debug("CPUID: max hypervisor leaf = 0x", std::hex, eax);
                 supported = (p_leaf <= eax);
             }
             else if (p_leaf < 0xC0000000) {
                 // Extended range: 0x80000000 - 0xBFFFFFFF
                 cpu::cpuid(eax, unused, unused, unused, cpu::leaf::func_ext);
-                debug("CPUID: max extended leaf = ", eax);
+                debug("CPUID: max extended leaf = 0x", std::hex, eax);
                 supported = (p_leaf <= eax);
             }
             else {
