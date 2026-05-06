@@ -1,24 +1,171 @@
-name: Cross-platform build result
+name: Cross-platform build
 
 on:
-  workflow_run:
-    workflows:
-      - "Linux Multi-Architecture Build"
-      - "macOS aarch64 Build"
-      - ".github/workflows/windows.yml"
-    types: [completed]
-    branches: [main]
+  push:
+    branches: ["main"]
+    paths:
+      - 'src/**/*.cpp'
+      - 'src/**/*.hpp'
+      - '.github/workflows/cross-platform-build.yml'
+      - '.github/workflows/*.bat'
+      - 'CMakeLists.txt'
+  pull_request:
+    branches: ["main"]
+    paths:
+      - 'src/**/*.cpp'
+      - 'src/**/*.hpp'
+      - '.github/workflows/cross-platform-build.yml'
+      - '.github/workflows/*.bat'
+      - 'CMakeLists.txt'
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  gate:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            image: debian:bookworm
+          - arch: arm64
+            platform: linux/arm64
+            image: debian:bookworm
+          - arch: armhf
+            platform: linux/arm/v7
+            image: debian:bookworm
+          - arch: armel
+            platform: linux/arm/v6
+            image: debian:bookworm
+          - arch: i386
+            platform: linux/386
+            image: debian:bookworm
+          - arch: mips64el
+            platform: linux/mips64le
+            image: debian:bookworm
+          - arch: ppc64el
+            platform: linux/ppc64le
+            image: debian:bookworm
+          - arch: riscv64
+            platform: linux/riscv64
+            image: debian:sid
+          - arch: s390x
+            platform: linux/s390x
+            image: debian:bookworm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Build (${{ matrix.arch }})
+        run: |
+          docker run --rm \
+            --platform ${{ matrix.platform }} \
+            -v ${{ github.workspace }}:/src \
+            -w /src \
+            ${{ matrix.image }} \
+            bash -c "
+              apt-get update -q &&
+              apt-get install -y --no-install-recommends cmake g++ build-essential &&
+              cmake -B build -DCMAKE_BUILD_TYPE=Release &&
+              cmake --build build --config Release
+            "
+
+      - name: Run binary (${{ matrix.arch }})
+        run: |
+          docker run --rm \
+            --platform ${{ matrix.platform }} \
+            -v ${{ github.workspace }}:/src \
+            -w /src \
+            ${{ matrix.image }} \
+            ./build/vmaware
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vmaware-linux-${{ matrix.arch }}
+          path: build/vmaware
+          if-no-files-found: error
+          retention-days: 30
+
+  macos:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: aarch64
+            cmake_arch: arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Dev_Release \
+            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.cmake_arch }} \
+            -S ${{ github.workspace }}
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run binary
+        run: build/vmaware
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vmaware-macos-${{ matrix.arch }}
+          path: build/vmaware
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - config: 64-debug
+            bat: build_run_win_64_debug.bat
+            artifact: vmaware64_debug.exe
+          - config: 32-debug
+            bat: build_run_win_32_debug.bat
+            artifact: vmaware32_debug.exe
+          - config: 32-release
+            bat: build_run_win_32_release.bat
+            artifact: vmaware32_release.exe
+          - config: 64-release
+            bat: build_run_win_64_release.bat
+            artifact: vmaware64_release.exe
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disable Windows Defender real-time monitoring
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+      - run: cmd.exe /c .github\workflows\${{ matrix.bat }}
+      - name: Rename binary with commit info
+        shell: pwsh
+        run: |
+          $shortSha = "${{ github.sha }}".Substring(0,12)
+          $run = "${{ github.run_number }}"
+          Add-Content $env:GITHUB_ENV "SHORT_SHA=$shortSha"
+          Rename-Item build\Release\vmaware.exe "vmaware_${run}_${shortSha}.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: build\Release\vmaware_${{ github.run_number }}_${{ env.SHORT_SHA }}.exe
+
+  all-platforms:
+    needs: [linux, macos, windows]
     runs-on: ubuntu-latest
     steps:
-      - name: Check result
-        run: |
-          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
-            echo "${{ github.event.workflow_run.name }} did not succeed (conclusion: ${{ github.event.workflow_run.conclusion }})"
-            exit 1
-          fi
+      - run: echo "All platforms built successfully"
