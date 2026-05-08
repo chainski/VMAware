@@ -916,7 +916,6 @@ static void general(
     checker(VM::CPU_BRAND, "CPU brand");
     checker(VM::HYPERVISOR_BIT, "CPUID hypervisor bit");
     checker(VM::HYPERVISOR_STR, "hypervisor str");
-    checker(VM::TIMER, "timing anomalies");
     checker(VM::THREAD_COUNT, "thread count");
     checker(VM::MAC, "MAC addresses");
     checker(VM::TEMPERATURE, "temperature");
@@ -1002,6 +1001,7 @@ static void general(
     checker(VM::HYPERVISOR_HOOK, "EPT/NPT hooking");
     checker(VM::SINGLE_STEP, "single step behavior");
     checker(VM::EIP_OVERFLOW, "instructions in compat mode");
+    checker(VM::TIMER, "timing anomalies");
 
     // ADD NEW TECHNIQUE CHECKER HERE
 
