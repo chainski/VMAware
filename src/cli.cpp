@@ -1002,6 +1002,7 @@ static void general(
     checker(VM::SINGLE_STEP, "single step behavior");
     checker(VM::EIP_OVERFLOW, "instructions in compat mode");
     checker(VM::CGROUP, "cgroup namespace");
+    checker(VM::TIMER, "timing anomalies");
 
     // ADD NEW TECHNIQUE CHECKER HERE
 
