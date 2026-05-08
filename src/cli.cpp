@@ -466,12 +466,12 @@ static const char* color(const u8 score, const bool is_hardened) {
         Neko Project II
         NoirVisor
         Qihoo 360 Sandbox
-        nsjail
         DBVM
         UTM
         Compaq FX!32
         Insignia RealPC
         Connectix Virtual PC
+        Containerd
         )";
     std::exit(0);
 }
@@ -580,12 +580,12 @@ static const char* get_vm_description(const std::string& vm_brand) {
         return "";
     }
 
-    struct BrandEntry {
+    struct brand_entry {
         const char* brand;
         const char* description;
     };
 
-    static const BrandEntry table[] = {
+    static const brand_entry table[] = {
         { VM::brands::VBOX, "Oracle VirtualBox (formerly Sun VirtualBox, Sun xVM VirtualBox and InnoTek VirtualBox) is a free and commercial hosted hypervisor for x86 and Apple ARM64 virtualization developed by Oracle Corporation initially released in 2007. It supports Intel's VT-x and AMD's AMD-V hardware-assisted virtualization, while providing an extensive feature set as a staple of its flexibility and wide use cases." },
         { VM::brands::VMWARE, "VMware is a free and commercial type 2 hypervisor initially released in 1999 and acquired by EMC, then Dell, and finally Broadcom Inc in 2023. It was the first commercially successful company to virtualize the x86 architecture, and has since produced many sub-versions of the hypervisor since its inception. It uses binary translation to re-write the code dynamically for a faster performance." },
         { VM::brands::VMWARE_EXPRESS, "VMware Express (formerly VMware GSX Server Express) was a free entry-level version of VMware's hosted hypervisor for small-scale virtualization. Released in 2003, it offered basic VM management capabilities but lacked advanced features like VMotion. Discontinued in 2006 as VMware shifted focus to enterprise solutions like ESX and vSphere." },
@@ -650,12 +650,12 @@ static const char* get_vm_description(const std::string& vm_brand) {
         { VM::brands::NEKO_PROJECT, "Neko Project II is an emulator designed for emulating PC-98 computers. They are a lineup of Japanese 16-bit and 32-bit personal computers manufactured by NEC from 1982 to 2003. While based on Intel processors, it uses an in-house architecture making it incompatible with IBM clones." },
         { VM::brands::NOIRVISOR, "NoirVisor is a hardware-accelerated hypervisor with support to complex functions and purposes. It is designed to support processors based on x86 architecture with hardware-accelerated virtualization feature. For example, Intel processors supporting Intel VT-x or AMD processors supporting AMD-V meet the requirement. It was made by Zero-Tang." },
         { VM::brands::QIHOO, "360 sandbox is a part of 360 Total Security. Similar to other sandbox software, it provides a virtualized environment where potentially malicious or untrusted programs can run without affecting the actual system. Qihoo 360 Sandbox is commonly used for testing unknown applications, analyzing malware behavior, and protecting users from zero-day threats." },
-        { VM::brands::NSJAIL, "nsjail is a process isolation tool for Linux. It utilizes Linux namespace subsystem, resource limits, and the seccomp-bpf syscall filters of the Linux kernel. It can be used for isolating networking services, CTF challenges, and containing invasive syscall-level OS fuzzers." },
         { VM::brands::DBVM, "DBVM is a ultra-lightweight virtual machine host that makes Windows run in a virtual machine so that Cheat Engine can operate at a higher level than the OS using a device driver. Instead of virtualizing devices it generally passes on interrupts unaltered meaning it has a very small impact on performance." },
         { VM::brands::UTM, "UTM for macOS is a free, open-source virtualization and emulation app that brings full-featured virtual machines to both Intel and Apple Silicon Macs. It employs Apple's Hypervisor virtualization framework to run ARM64 operating systems on Apple Silicon at near native speeds. On other architectures, it employs software emulation through QEMU." },
         { VM::brands::COMPAQ, "Compaq FX!32 is an emulator that is designed to run Win32 programs for the DEC instruction set architecture. Released in 1996, it was developed by developed by Digital Equipment Corporation (DEC) to support their Alpha microprocessors. It analyzed the way programs worked and, after the program ran, used binary translation to produce dynamic-link library (DLL) files of native Alpha code that the application could execute the next time it ran." },
         { VM::brands::INSIGNIA, "RealPC was an emulator for the Macintosh line of PCs. It emulated a Pentium-based PC to run Windows NT, Windows 95, and Windows 98 programs. It was discontinued in 2003." },
         { VM::brands::CONNECTIX, "Connectix VirtualPC was the predecessor to Microsoft's VirtualPC. Originally developed as a Macintosh application for System 7.5 and released by Connectix in June 1997, it supported various OS's such as Linux and old versions of Windows. It was bought by Microsoft in February 2003." },
+        { VM::brands::CONTAINERD, "Containerd is an industry-standard container runtime used as the core engine beneath Docker, Kubernetes, and other container platforms. It manages the complete container lifecycle including image transfer, storage, execution, and supervision." },
         { VM::brands::NULL_BRAND, "Indicates no detectable virtualization brand. This result may occur on bare-metal systems, unsupported/obscure hypervisors, or when anti-detection techniques (e.g., VM escaping) are employed by the guest environment." }
     };
 
@@ -982,7 +982,7 @@ static void general(
     checker(VM::VIRTUAL_REGISTRY, "registry emulation");
     checker(VM::FIRMWARE, "firmware");
     checker(VM::FILE_ACCESS_HISTORY, "low file access count");
-    checker(VM::NSJAIL_PID, "nsjail PID");
+    checker(VM::CONTAINER_PID, "container PID");
     checker(VM::DEVICES, "PCI vendor/device ID");
     checker(VM::ACPI_SIGNATURE, "ACPI device signatures");
     checker(VM::UD, "undefined exceptions");
@@ -1001,7 +1001,7 @@ static void general(
     checker(VM::HYPERVISOR_HOOK, "EPT/NPT hooking");
     checker(VM::SINGLE_STEP, "single step behavior");
     checker(VM::EIP_OVERFLOW, "instructions in compat mode");
-    checker(VM::TIMER, "timing anomalies");
+    checker(VM::CGROUP, "cgroup namespace");
 
     // ADD NEW TECHNIQUE CHECKER HERE
 
