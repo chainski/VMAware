@@ -7409,7 +7409,7 @@ public:
 
         // inside struct to not have to move out of function, constexpr this way because of c++ 11 compatibility
         struct array_validator {
-            static constexpr bool verify_no_nulls(const std::array<const char*, 22>& arr, size_t i) {
+            static constexpr bool verify_no_nulls(const std::array<const char*, 21>& arr, size_t i) {
                 return (i == arr.size())
                     ? true
                     : (arr[i] != nullptr && verify_no_nulls(arr, i + 1));
