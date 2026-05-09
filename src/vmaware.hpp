@@ -7389,27 +7389,27 @@ public:
         };
 
         // "WAET" is also present as a string inside the WAET table, so there's no need to check for its table signature
-        constexpr std::array<const char*, 22> targets = { {
+        constexpr std::array<const char*, 21> targets = { {
             "Parallels Software", "Parallels(R)",
             "innotek",            "Oracle",   "VirtualBox", "vbox", "VBOX",
             "VMware, Inc.",       "VMware",   "VMWARE",     "VMW0003",
-            "QEMU",               "pc-q35",   "Q35 +",      "FWCF",     "BOCHS",
+            "QEMU",               "pc-q35",   "Q35 +",      "BOCHS",
             "ovmf",               "edk ii unknown", "WAET", "S3 Corp.", "VS2005R2",
             "Xen"
         } };
 
-        constexpr std::array<brand_enum, 22> brands_map = { {
+        constexpr std::array<brand_enum, 21> brands_map = { {
             brand_enum::PARALLELS,  brand_enum::PARALLELS,
             brand_enum::VBOX,       brand_enum::VBOX,       brand_enum::VBOX,       brand_enum::VBOX,       brand_enum::VBOX,
             brand_enum::VMWARE,     brand_enum::VMWARE,     brand_enum::VMWARE,     brand_enum::VMWARE,
-            brand_enum::QEMU,       brand_enum::QEMU,       brand_enum::QEMU,       brand_enum::QEMU,       brand_enum::BOCHS,
+            brand_enum::QEMU,       brand_enum::QEMU,       brand_enum::QEMU,       brand_enum::BOCHS,
             brand_enum::NULL_BRAND, brand_enum::NULL_BRAND, brand_enum::NULL_BRAND, brand_enum::NULL_BRAND, brand_enum::NULL_BRAND,
             brand_enum::XEN
         } };
 
         // inside struct to not have to move out of function, constexpr this way because of c++ 11 compatibility
         struct array_validator {
-            static constexpr bool verify_no_nulls(const std::array<const char*, 22>& arr, size_t i) {
+            static constexpr bool verify_no_nulls(const std::array<const char*, 21>& arr, size_t i) {
                 return (i == arr.size())
                     ? true
                     : (arr[i] != nullptr && verify_no_nulls(arr, i + 1));
