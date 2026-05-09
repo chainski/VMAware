@@ -918,7 +918,6 @@ static void general(
     checker(VM::CPU_BRAND, "CPU brand");
     checker(VM::HYPERVISOR_BIT, "CPUID hypervisor bit");
     checker(VM::HYPERVISOR_STR, "hypervisor str");
-    checker(VM::TIMER, "timing anomalies");
     checker(VM::THREAD_COUNT, "thread count");
     checker(VM::MAC, "MAC addresses");
     checker(VM::TEMPERATURE, "temperature");
@@ -988,23 +987,24 @@ static void general(
     checker(VM::CONTAINER_PID, "container PID");
     checker(VM::DEVICES, "PCI vendor/device ID");
     checker(VM::ACPI_SIGNATURE, "ACPI device signatures");
-    checker(VM::TRAP, "hypervisor interception");
     checker(VM::UD, "undefined exceptions");
-    checker(VM::INTERRUPT_SHADOW, "interrupt shadows");
     checker(VM::DBVM, "DBVM hypervisor");
     checker(VM::BOOT_LOGO, "boot logo");
     checker(VM::MAC_SYS, "system profiler");
     checker(VM::KERNEL_OBJECTS, "kernel objects");
     checker(VM::NVRAM, "NVRAM");
     checker(VM::EDID, "EDID");
-    checker(VM::CPU_HEURISTIC, "CPU heuristics");
     checker(VM::CLOCK, "system timers");
     checker(VM::MSR, "model specific registers");
+    checker(VM::CPU_HEURISTIC, "instruction capabilities");
+    checker(VM::INTERRUPT_SHADOW, "interrupt shadows");
+    checker(VM::TRAP, "hypervisor interception");
     checker(VM::KVM_INTERCEPTION, "KVM interception");
     checker(VM::HYPERVISOR_HOOK, "EPT/NPT hooking");
-    checker(VM::POPF, "popf behavior");
+    checker(VM::SINGLE_STEP, "single step behavior");
     checker(VM::EIP_OVERFLOW, "instructions in compat mode");
     checker(VM::CGROUP, "cgroup namespace");
+    checker(VM::TIMER, "timing anomalies");
 
     // ADD NEW TECHNIQUE CHECKER HERE
 

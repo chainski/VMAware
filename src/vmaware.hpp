@@ -596,7 +596,7 @@ public:
         MSR,
         KVM_INTERCEPTION,
         HYPERVISOR_HOOK,
-        POPF,
+        SINGLE_STEP,
         EIP_OVERFLOW,
 
         // Linux and Windows
@@ -911,19 +911,19 @@ public:
             if (p_leaf < 0x40000000) {
                 // Standard range: 0x00000000 - 0x3FFFFFFF
                 cpu::cpuid(eax, unused, unused, unused, 0x00000000);
-                debug("CPUID: max standard leaf = ", eax);
+                debug("CPUID: max standard leaf = 0x", std::hex, eax);
                 supported = (p_leaf <= eax);
             }
             else if (p_leaf < 0x80000000) {
                 // Hypervisor range: 0x40000000 - 0x7FFFFFFF
                 cpu::cpuid(eax, unused, unused, unused, cpu::leaf::hypervisor);
-                debug("CPUID: max hypervisor leaf = ", eax);
+                debug("CPUID: max hypervisor leaf = 0x", std::hex, eax);
                 supported = (p_leaf <= eax);
             }
             else if (p_leaf < 0xC0000000) {
                 // Extended range: 0x80000000 - 0xBFFFFFFF
                 cpu::cpuid(eax, unused, unused, unused, cpu::leaf::func_ext);
-                debug("CPUID: max extended leaf = ", eax);
+                debug("CPUID: max extended leaf = 0x", std::hex, eax);
                 supported = (p_leaf <= eax);
             }
             else {
@@ -7520,27 +7520,27 @@ public:
         };
 
         // "WAET" is also present as a string inside the WAET table, so there's no need to check for its table signature
-        constexpr std::array<const char*, 22> targets = { {
+        constexpr std::array<const char*, 21> targets = { {
             "Parallels Software", "Parallels(R)",
             "innotek",            "Oracle",   "VirtualBox", "vbox", "VBOX",
             "VMware, Inc.",       "VMware",   "VMWARE",     "VMW0003",
-            "QEMU",               "pc-q35",   "Q35 +",      "FWCF",     "BOCHS",
+            "QEMU",               "pc-q35",   "Q35 +",      "BOCHS",
             "ovmf",               "edk ii unknown", "WAET", "S3 Corp.", "VS2005R2",
             "Xen"
         } };
 
-        constexpr std::array<brand_enum, 22> brands_map = { {
+        constexpr std::array<brand_enum, 21> brands_map = { {
             brand_enum::PARALLELS,  brand_enum::PARALLELS,
             brand_enum::VBOX,       brand_enum::VBOX,       brand_enum::VBOX,       brand_enum::VBOX,       brand_enum::VBOX,
             brand_enum::VMWARE,     brand_enum::VMWARE,     brand_enum::VMWARE,     brand_enum::VMWARE,
-            brand_enum::QEMU,       brand_enum::QEMU,       brand_enum::QEMU,       brand_enum::QEMU,       brand_enum::BOCHS,
+            brand_enum::QEMU,       brand_enum::QEMU,       brand_enum::QEMU,       brand_enum::BOCHS,
             brand_enum::NULL_BRAND, brand_enum::NULL_BRAND, brand_enum::NULL_BRAND, brand_enum::NULL_BRAND, brand_enum::NULL_BRAND,
             brand_enum::XEN
         } };
 
         // inside struct to not have to move out of function, constexpr this way because of c++ 11 compatibility
         struct array_validator {
-            static constexpr bool verify_no_nulls(const std::array<const char*, 22>& arr, size_t i) {
+            static constexpr bool verify_no_nulls(const std::array<const char*, 21>& arr, size_t i) {
                 return (i == arr.size())
                     ? true
                     : (arr[i] != nullptr && verify_no_nulls(arr, i + 1));
@@ -12874,9 +12874,9 @@ public:
     /**
      * @brief Check whether a hypervisor delays trap flags over exiting instructions
      * @category Windows, x86
-     * @implements VM::POPF
+     * @implements VM::SINGLE_STEP
      */
-    [[nodiscard]] static bool popf() {
+    [[nodiscard]] static bool single_step() {
     #if (!x86)
         return false;
     #else
@@ -13887,7 +13887,7 @@ public:
             case MSR: return "MSR";
             case KVM_INTERCEPTION: return "KVM_INTERCEPTION";
             case HYPERVISOR_HOOK: return "BREAKPOINT";
-            case POPF: return "POPF";
+            case SINGLE_STEP: return "POPF";
             case EIP_OVERFLOW: return "EIP_OVERFLOW";
             case CGROUP: return "CGROUP";
             // END OF TECHNIQUE LIST
@@ -14423,31 +14423,31 @@ std::array<VM::core::technique, VM::enum_size + 1> VM::core::technique_table = [
         // START OF TECHNIQUE TABLE
         #if (WINDOWS)
             {VM::TRAP, {100, VM::trap}},
+            {VM::KVM_INTERCEPTION, {100, VM::kvm_interception}},
+            {VM::INTERRUPT_SHADOW, {100, VM::interrupt_shadow}},
+            {VM::EIP_OVERFLOW, {100, VM::eip_overflow}},
+            {VM::HYPERVISOR_HOOK, {100, VM::hypervisor_hook}},
+            {VM::SINGLE_STEP, {100, VM::single_step}},
             {VM::NVRAM, {100, VM::nvram}},
-            {VM::HYPERVISOR_QUERY, {100, VM::hypervisor_query}},
-            {VM::ACPI_SIGNATURE, {100, VM::acpi_signature}},
             {VM::CPU_HEURISTIC, {90, VM::cpu_heuristic}},
+            {VM::ACPI_SIGNATURE, {100, VM::acpi_signature}},
             {VM::CLOCK, {45, VM::clock}},
             {VM::POWER_CAPABILITIES, {25, VM::power_capabilities}},
             {VM::GPU_CAPABILITIES, {25, VM::gpu_capabilities}},
-            {VM::KVM_INTERCEPTION, {100, VM::kvm_interception}},
-            {VM::EIP_OVERFLOW, {100, VM::eip_overflow}},
-            {VM::HYPERVISOR_HOOK, {100, VM::hypervisor_hook}},
-            {VM::POPF, {100, VM::popf}},
-            {VM::INTERRUPT_SHADOW, {100, VM::interrupt_shadow}},
-            {VM::MSR, {100, VM::msr}},
             {VM::EDID, {100, VM::edid}},
+            {VM::MSR, {100, VM::msr}},
             {VM::VIRTUAL_PROCESSORS, {100, VM::virtual_processors}},
             {VM::WINE, {100, VM::wine}},
             {VM::DBVM, {150, VM::dbvm}},
+            {VM::UD, {100, VM::ud}},
             {VM::IVSHMEM, {100, VM::ivshmem}},
             {VM::DRIVERS, {100, VM::drivers}},
+            {VM::HYPERVISOR_QUERY, {100, VM::hypervisor_query}},
             {VM::HANDLES, {100, VM::device_handles}},
             {VM::KERNEL_OBJECTS, {100, VM::kernel_objects}},
+            {VM::DLL, {50, VM::dll}},
             {VM::AUDIO, {25, VM::audio}},
             {VM::DISPLAY, {25, VM::display}},
-            {VM::DLL, {50, VM::dll}},
-            {VM::UD, {100, VM::ud}},
             {VM::VMWARE_BACKDOOR, {100, VM::vmware_backdoor}},
             {VM::VIRTUAL_REGISTRY, {90, VM::virtual_registry}},
             {VM::MUTEX, {100, VM::mutex}},
