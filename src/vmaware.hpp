@@ -459,7 +459,7 @@
 namespace brands { // TODO, remove this in the 2.8.0 or any release after the 2.7.0
     #define LEGACY(name, full_name) \
         [[deprecated("Use VM::brands::" #name " instead")]] \
-        static constexpr const char* (name) = full_name
+        static constexpr const char* name = full_name /* NOLINT(bugprone-macro-parentheses) */
 
     LEGACY(NULL_BRAND, "Unknown");
     LEGACY(VBOX, "VirtualBox");
@@ -835,8 +835,15 @@ public:
             *b = static_cast<unsigned int>(regs[1]);
             *c = static_cast<unsigned int>(regs[2]);
             *d = static_cast<unsigned int>(regs[3]);
-        #else
+        #elif (x86)
             __get_cpuid_count(leaf, subleaf, a, b, c, d);
+        #else
+            VMAWARE_UNUSED(leaf); 
+            VMAWARE_UNUSED(subleaf); 
+            VMAWARE_UNUSED(a); 
+            VMAWARE_UNUSED(b); 
+            VMAWARE_UNUSED(c); 
+            VMAWARE_UNUSED(d);
         #endif
         }
 
