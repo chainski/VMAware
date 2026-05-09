@@ -346,7 +346,8 @@
 #endif
 #if (VMA_CPP >= 20)
     #include <bit>
-    #include <ranges>
+    #include <cstddef>
+#include <ranges>
     #if (SOURCE_LOCATION_SUPPORTED)
         #include <source_location>
     #endif
@@ -413,12 +414,11 @@
     #include <net/if.h> 
     #include <netinet/in.h>
     #include <unistd.h>
-    #include <string.h>
     #include <dirent.h>
     #include <memory>
     #include <cctype>
     #include <fcntl.h>
-    #include <limits.h>
+    #include <climits>
     #include <csignal>      
     #include <csetjmp>      
     #include <pthread.h>     
@@ -459,7 +459,7 @@
 namespace brands { // TODO, remove this in the 2.8.0 or any release after the 2.7.0
     #define LEGACY(name, full_name) \
         [[deprecated("Use VM::brands::" #name " instead")]] \
-        static constexpr const char* name = full_name
+        static constexpr const char* (name) = full_name
 
     LEGACY(NULL_BRAND, "Unknown");
     LEGACY(VBOX, "VirtualBox");
@@ -827,22 +827,18 @@ public:
                 amd_easter_egg = 0x8fffffff;
         };
 
+        static void cpuid_count(unsigned leaf, unsigned subleaf, unsigned* a, unsigned* b, unsigned* c, unsigned* d) {
         #if (MSVC)
-            #define CPUID_COUNT(leaf, subleaf, a_ptr, b_ptr, c_ptr, d_ptr) \
-                    do { \
-                        int __cpuid_regs[4]; \
-                        __cpuidex(__cpuid_regs, static_cast<int>(leaf), static_cast<int>(subleaf)); \
-                        *(a_ptr) = static_cast<unsigned int>(__cpuid_regs[0]); \
-                        *(b_ptr) = static_cast<unsigned int>(__cpuid_regs[1]); \
-                        *(c_ptr) = static_cast<unsigned int>(__cpuid_regs[2]); \
-                        *(d_ptr) = static_cast<unsigned int>(__cpuid_regs[3]); \
-                    } while (0)
+            int regs[4];
+            __cpuidex(regs, static_cast<int>(leaf), static_cast<int>(subleaf));
+            *a = static_cast<unsigned int>(regs[0]);
+            *b = static_cast<unsigned int>(regs[1]);
+            *c = static_cast<unsigned int>(regs[2]);
+            *d = static_cast<unsigned int>(regs[3]);
         #else
-            #define CPUID_COUNT(leaf, subleaf, a_ptr, b_ptr, c_ptr, d_ptr) \
-                    do { \
-                        __get_cpuid_count((unsigned)(leaf), (unsigned)(subleaf), (a_ptr), (b_ptr), (c_ptr), (d_ptr)); \
-                    } while (0)
+            __get_cpuid_count(leaf, subleaf, a, b, c, d);
         #endif
+        }
 
         // cross-platform wrapper for linux and MSVC cpuid
         static void cpuid
@@ -858,15 +854,17 @@ public:
             c = 0;
             d = 0;
 
-            unsigned int aa = 0u, bb = 0u, cc = 0u, dd = 0u;
-            CPUID_COUNT(a_leaf, c_leaf, &aa, &bb, &cc, &dd);
+            u32 aa = 0u;
+            u32 bb = 0u;
+            u32 cc = 0u;
+            u32 dd = 0u;
+            cpuid_count(a_leaf, c_leaf, &aa, &bb, &cc, &dd);
 
-            a = static_cast<u32>(aa);
-            b = static_cast<u32>(bb);
-            c = static_cast<u32>(cc);
-            d = static_cast<u32>(dd);
+            a = aa;
+            b = bb;
+            c = cc;
+            d = dd;
         #endif
-            return;
         };
 
         // same as above but for array type parameters (MSVC specific)
@@ -883,28 +881,31 @@ public:
             x[2] = 0;
             x[3] = 0;
 
-            unsigned int aa = 0u, bb = 0u, cc = 0u, dd = 0u;
-            CPUID_COUNT(a_leaf, c_leaf, &aa, &bb, &cc, &dd);
+            u32 aa = 0u;
+            u32 bb = 0u;
+            u32 cc = 0u;
+            u32 dd = 0u;
+            cpuid_count(a_leaf, c_leaf, &aa, &bb, &cc, &dd);
 
             x[0] = static_cast<i32>(aa);
             x[1] = static_cast<i32>(bb);
             x[2] = static_cast<i32>(cc);
             x[3] = static_cast<i32>(dd);
         #endif
-            return;
         };
 
         static bool is_leaf_supported(const u32 p_leaf) {
         #if (APPLE) 
             return false;
         #endif
-            bool cached;
+            bool cached = false;
 
             if (memo::leaf_cache::fetch(p_leaf, cached)) {
                 return cached;
             }
 
-            u32 eax = 0, unused = 0;
+            u32 eax = 0; 
+            u32 unused = 0;
             bool supported = false;
 
             if (p_leaf < 0x40000000) {
@@ -936,7 +937,8 @@ public:
         [[nodiscard]] static bool is_amd() {
             constexpr u32 amd_ecx = 0x444d4163; // "cAMD"
 
-            u32 unused, ecx = 0;
+            u32 unused = 0;
+            u32 ecx = 0;
             cpuid(unused, unused, ecx, unused, 0);
 
             return (ecx == amd_ecx);
@@ -946,7 +948,8 @@ public:
             constexpr u32 intel_ecx1 = 0x6c65746e; // "ntel"
             constexpr u32 intel_ecx2 = 0x6c65746f; // "otel", this is because some Intel CPUs have a rare manufacturer string of "GenuineIotel"
 
-            u32 unused, ecx = 0;
+            u32 unused = 0;
+            u32 ecx = 0;
             cpuid(unused, unused, ecx, unused, 0);
 
             return ((ecx == intel_ecx1) || (ecx == intel_ecx2));
@@ -995,7 +998,11 @@ public:
             alignas(16) char buffer[13]{};
             u32* regs = reinterpret_cast<u32*>(buffer);
 
-            u32 eax, ebx, ecx, edx;
+            u32 eax = 0;
+            u32 ebx = 0;
+            u32 ecx = 0;
+            u32 edx = 0;
+
             cpu::cpuid(eax, ebx, ecx, edx, leaf_id);
 
             if (ebx == 0 && ecx == 0 && edx == 0) {
@@ -1014,7 +1021,7 @@ public:
             }
 
             buffer[12] = '\0';
-            return std::string(buffer);
+            return { buffer };
         }
 
         struct stepping_struct {
@@ -1026,7 +1033,9 @@ public:
         static stepping_struct fetch_steppings() {
             struct stepping_struct steps {};
 
-            u32 unused, eax = 0;
+            u32 unused = 0;
+            u32 eax = 0;
+
             cpu::cpuid(eax, unused, unused, unused, 1);
             VMAWARE_UNUSED(unused);
 
@@ -1063,11 +1072,15 @@ public:
             const char* s = model.string.c_str();
 
             for (; *s; ++s) {
-                if ((*s | 0x20) != 'a') continue;
+                if ((*s | 0x20) != 'a') {
+                    continue;
+                }
 
                 // check for "MD A" (case-insensitive match for "AMD A")
                 // We need 5 specific characters following the 'A': 'm', 'd', ' ', 'a', and a digit
-                if (!s[1] || !s[2] || !s[3] || !s[4] || !s[5]) break;
+                if (!s[1] || !s[2] || !s[3] || !s[4] || !s[5]) {
+                    break;
+                }
 
                 if ((s[1] | 0x20) == 'm' &&
                     (s[2] | 0x20) == 'd' &&
@@ -1078,9 +1091,20 @@ public:
                     const char* num = s + 5;
 
                     // must have at least one digit immediately after "AMD A"
-                    if (*num < '0' || *num > '9') continue;
-                    do { num++; } while (*num >= '0' && *num <= '9');
-                    if (*num != '-') continue;
+                    if (*num < '0' || *num > '9') {
+                        continue;
+                    }
+
+                    num++;
+                    while (*num >= '0' && *num <= '9') {
+                        num++;
+                    }
+
+    
+                    if (*num != '-') {
+                        continue;
+                    }
+
                     num++;
 
                     // Must have at least one digit after the hyphen
@@ -1116,7 +1140,7 @@ public:
                 }
 
                 // i-series
-                if (brand.find("i") != std::string::npos && brand.find("-") != std::string::npos &&
+                if (brand.find('i') != std::string::npos && brand.find('-') != std::string::npos &&
                     brand.find_first_of("0123456789") != std::string::npos) {
                     result.found = true;
                     result.is_i_series = true;
@@ -1125,7 +1149,7 @@ public:
                 }
 
                 // Xeon
-                if (brand.find_first_of("DEW") != std::string::npos && brand.find("-") != std::string::npos &&
+                if (brand.find_first_of("DEW") != std::string::npos && brand.find('-') != std::string::npos &&
                     brand.find_first_of("0123456789") != std::string::npos) {
                     result.found = true;
                     result.is_xeon = true;
@@ -1244,10 +1268,11 @@ public:
             bool found = false;
             bool has_sse42 = false;
             const char* debug_tag = "";
-            std::string model_name = "";
+            std::string model_name;
         };
 
-        enum class cpu_type {
+        enum class cpu_type : u8 {
+            UNKNOWN,
             INTEL_I,
             INTEL_XEON,
             INTEL_ULTRA,
@@ -1258,7 +1283,9 @@ public:
             static cpu_cache result;
             static bool initialized = false;
 
-            if (initialized) return result;
+            if (initialized) {
+                return result;
+            }
 
             {
                 i32 regs[4];
@@ -1270,8 +1297,9 @@ public:
             struct hasher {
                 static u32 crc32_sw(u32 crc, char data) {
                     crc ^= static_cast<u8>(data);
-                    for (int i = 0; i < 8; ++i)
+                    for (int i = 0; i < 8; ++i) {
                         crc = (crc >> 1) ^ ((crc & 1) ? 0x82F63B78u : 0);
+                    }
                     return crc;
                 }
 
@@ -1284,8 +1312,8 @@ public:
 
             const cpu_entry* db = nullptr;
             size_t db_size = 0;
-            size_t max_model_len = 32;
-            cpu_type type;
+            const size_t max_model_len = 32;
+            cpu_type type = cpu_type::UNKNOWN;
 
             // Detection logic
             if (is_amd()) {
@@ -1338,7 +1366,7 @@ public:
             const auto hash_func = hasher::get();
 
             for (size_t i = 0; str[i] != '\0'; ) {
-                char c = str[i];
+                const char c = str[i];
                 if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) {
                     i++;
                     continue;
@@ -1354,15 +1382,21 @@ public:
                         (k >= 'A' && k <= 'Z') ||
                         (k >= 'a' && k <= 'z') ||
                         (k == '-');
-                    if (!is_valid) break;
+                    if (!is_valid) {
+                        break;
+                    }
 
                     if (current_len >= max_model_len) {
-                        while (str[j] != '\0' && str[j] != ' ') j++;
+                        while (str[j] != '\0' && str[j] != ' ') {
+                            j++;
+                        }
                         break;
                     }
 
                     // convert to lowercase on-the-fly to match compile-time keys
-                    if (type == cpu_type::AMD && (k >= 'A' && k <= 'Z')) k += 32;
+                    if (type == cpu_type::AMD && (k >= 'A' && k <= 'Z')) {
+                        k += 32;
+                    }
 
                     current_hash = hash_func(current_hash, k);
                     current_len++;
@@ -1402,7 +1436,7 @@ public:
             return result;
         }
 
-        inline static void get_intel_core_db(const cpu_entry*& out_ptr, size_t& out_size) {
+        static void get_intel_core_db(const cpu_entry*& out_ptr, size_t& out_size) {
             static const cpu_entry db[] = {
                 // i3 series
                 { "i3-1000G1", 4 },
@@ -2415,7 +2449,7 @@ public:
             out_size = sizeof(db) / sizeof(cpu_entry);
         }
 
-        inline static void get_intel_xeon_db(const cpu_entry*& out_ptr, size_t& out_size) {
+        static void get_intel_xeon_db(const cpu_entry*& out_ptr, size_t& out_size) {
             static const cpu_entry db[] = {
                 { "D-1518", 8 },
                 { "D-1520", 8 },
@@ -2554,7 +2588,7 @@ public:
             out_size = sizeof(db) / sizeof(cpu_entry);
         }
 
-        inline static void get_intel_ultra_db(const cpu_entry*& db, size_t& size) {
+        static void get_intel_ultra_db(const cpu_entry*& db, size_t& size) {
             static const cpu_entry intel_ultra[] = {
                 // Series 2 (Arrow Lake - Desktop/Mobile) - No HT on P-Cores
                 { "285K", 24 },
@@ -2588,7 +2622,7 @@ public:
             size = sizeof(intel_ultra) / sizeof(cpu_entry);
         }
 
-        inline static void get_amd_ryzen_db(const cpu_entry*& out_ptr, size_t& out_size) {
+        static void get_amd_ryzen_db(const cpu_entry*& out_ptr, size_t& out_size) {
             static const cpu_entry db[] = {
                 // 3015/3020
                 { "3015ce", 4 },
@@ -3109,7 +3143,10 @@ public:
 
     static void str_cat(char* dest, const char* src, size_t max_len) {
         size_t i = 0;
-        while (dest[i] != '\0') i++;
+        while (dest[i] != '\0') {
+            i++;
+        }
+
         size_t j = 0;
         while (src[j] != '\0' && i < max_len - 1) {
             dest[i++] = src[j++];
@@ -3118,10 +3155,19 @@ public:
     }
 
     static bool str_eq(const char* a, const char* b) {
-        if (a == b) return true;
-        if (!a || !b) return false;
+        if (a == b) {
+            return true;
+        }
+
+        if (!a || !b) {
+            return false;
+        }
+
         while (*a && *b) {
-            if (*a != *b) return false;
+            if (*a != *b) {
+                return false;
+            }
+
             a++; b++;
         }
         return *a == *b;
@@ -3146,28 +3192,39 @@ public:
 
         static void cache_store(u16 flag, bool result, u8 points, const brand_enum brand = brand_enum::NULL_BRAND) {
             if (flag <= enum_size) {
-                cache_table[flag] = { result, points, true, brand };
+                cache_table.at(flag) = { result, points, true, brand };
             }
         }
 
         static bool is_cached(u16 flag) {
             if (flag <= enum_size) {
-                return cache_table[flag].has_value;
+                return cache_table.at(flag).has_value;
             }
             return false;
         }
 
         static data_t cache_fetch(u16 flag) {
-            if (flag <= enum_size && cache_table[flag].has_value) {
-                return { cache_table[flag].result, cache_table[flag].points, true, cache_table[flag].brand_name };
+            if (flag <= enum_size && cache_table.at(flag).has_value) {
+                return { 
+                    /* result */ cache_table.at(flag).result, 
+                    /* points */ cache_table.at(flag).points, 
+                    /* cached */ true, 
+                    /* brand_name */ cache_table.at(flag).brand_name
+                };
             }
-            return { false, 0, false, brand_enum::NULL_BRAND };
+
+            return { 
+                /* result */ false, 
+                /* points */ 0, 
+                /* cached */ false, 
+                /* brand_name */ brand_enum::NULL_BRAND
+            };
         }
 
         static void uncache(u16 flag) {
             if (flag <= enum_size) {
-                cache_table[flag].has_value = false;
-                cache_table[flag].brand_name = brand_enum::NULL_BRAND;
+                cache_table.at(flag).has_value = false;
+                cache_table.at(flag).brand_name = brand_enum::NULL_BRAND;
             }
         }
 
@@ -3280,21 +3337,29 @@ public:
 
             static bool fetch(u32 leaf, bool& out) {
                 for (std::size_t i = 0; i < count; ++i) {
-                    if (table[i].has_value && table[i].leaf == leaf) { out = table[i].value; return true; }
+                    if (table.at(i).has_value && table.at(i).leaf == leaf) { 
+                        out = table.at(i).value; 
+                        return true; 
+                    }
                 }
                 return false;
             }
 
             static void store(u32 leaf, bool val) {
                 for (std::size_t i = 0; i < count; ++i) {
-                    if (table[i].leaf == leaf) { table[i].value = val; table[i].has_value = true; return; }
+                    if (table.at(i).leaf == leaf) { 
+                        table.at(i).value = val; 
+                        table.at(i).has_value = true;
+                        return; 
+                    }
                 }
+
                 if (count < CAPACITY) {
-                    table[count++] = { leaf, val, true };
+                    table.at(count++) = { leaf, val, true };
                     return;
                 }
                 // otherwise evict in round-robin fashion
-                table[next_index] = { leaf, val, true };
+                table.at(next_index) = { leaf, val, true };
                 next_index = (next_index + 1) % CAPACITY;
             }
         };
@@ -3310,7 +3375,7 @@ public:
                 const size_t cap = sizeof(manufacturer) - 1;
                 const size_t tocopy = (n > cap) ? cap : n;
                 memcpy(manufacturer, s, tocopy);
-                manufacturer[tocopy] = '\0';
+                *(manufacturer + tocopy) = '\0';
                 cached = true;
             }
             static void store_model(const char* s) noexcept {
@@ -3319,7 +3384,7 @@ public:
                 const size_t cap = sizeof(model) - 1;
                 const size_t tocopy = (n > cap) ? cap : n;
                 memcpy(model, s, tocopy);
-                model[tocopy] = '\0';
+                *(model + tocopy) = '\0';
                 cached = true;
             }
 
@@ -3368,7 +3433,7 @@ public:
     #if (LINUX)
         // fetch file data
         [[nodiscard]] static std::string read_file(const char* raw_path) {
-            std::string path = "";
+            std::string path;
             const std::string raw_path_str = raw_path;
 
             // replace the "~" part with the home directory
@@ -3411,7 +3476,7 @@ public:
         }
 
         static bool is_directory(const char* path) {
-            struct stat info;
+            struct stat info{};
             if (stat(path, &info) != 0) {
                 return false;
             }
@@ -3429,7 +3494,7 @@ public:
 
             std::vector<u8> buffer;
             std::istreambuf_iterator<char> it(file);
-            std::istreambuf_iterator<char> end;
+            const std::istreambuf_iterator<char> end;
 
             while (it != end) {
                 buffer.push_back(static_cast<u8>(*it));
@@ -3506,11 +3571,14 @@ public:
         };
 
         static std::string narrow_wide(const wchar_t* wstr) {
-            if (!wstr) return std::string{};
-            std::wstring ws(wstr);
+            if (!wstr) {
+                return {};
+            }
+
+            const std::wstring ws(wstr);
             std::string result;
             result.reserve(ws.size());
-            for (wchar_t wc : ws) {
+            for (const wchar_t wc : ws) {
                 result.push_back((static_cast<uint32_t>(wc) < 128)
                     ? static_cast<char>(wc)
                     : '?');
@@ -3540,7 +3608,7 @@ public:
         }
 
         // variadic pack printer for C++11
-        static inline void print_to_stream(std::ostream& /*unused*/) noexcept {}
+        static void print_to_stream(std::ostream& /*unused*/) noexcept {}
 
         // forward the first, then expand the rest in an initializer list
         template <typename T, typename... Args>
@@ -3557,14 +3625,14 @@ public:
         }
 
         template <typename... Args>
-        static inline void debug_msg(Args&&... message) noexcept {
+        static void debug_msg(Args&&... message) noexcept {
             static std::unordered_set<std::string> printed_messages;
 
             std::stringstream ss;
             print_to_stream(ss, std::forward<Args>(message)...);
             std::string msg_content = ss.str();
 
-            if (printed_messages.find(msg_content) == printed_messages.end()) {
+            if (!printed_messages.contains(msg_content)) {
             #if (LINUX || APPLE)
                 constexpr const char* black_bg = "\x1B[48;2;0;0;0m";
                 constexpr const char* bold = "\033[1m";
@@ -3604,25 +3672,15 @@ public:
                     }
                 };
 
-                std::unique_ptr<FILE, file_deleter> pipe(popen(cmd, "r"), file_deleter());
+                std::unique_ptr<FILE, file_deleter> const pipe(popen(cmd, "r"), file_deleter()); // NOLINT(bugprone-command-processor)
                 if (!pipe) {
                     return util::make_unique<std::string>();
                 }
 
                 std::string result;
-                char* line = nullptr;
-
-                // to ensure line is freed even if string::append throws std::bad_alloc
-                struct line_guard {
-                    char*& ptr;
-                    ~line_guard() { if (ptr) free(ptr); }
-                } guard{ line };
-
-                size_t len = 0;
-                ssize_t nread;
-
-                while ((nread = getline(&line, &len, pipe.get())) != -1) {
-                    result.append(line, static_cast<size_t>(nread));
+                char buf[4096];
+                while (std::fgets(buf, sizeof(buf), pipe.get()) != nullptr) {
+                    result.append(buf);
                 }
 
                 if (!result.empty() && result.back() == '\n') {
@@ -3687,14 +3745,14 @@ public:
                     continue;
                 }
 
-                std::string argv0(buf.begin(), it_nul);
+                std::string const argv0(buf.begin(), it_nul);
                 if (argv0.empty()) {
                     continue;
                 }
 
                 // extract basename of argv0
                 const std::size_t slash_index = argv0.find_last_of('/');
-                std::string basename = (slash_index == std::string::npos) ? argv0 : argv0.substr(slash_index + 1);
+                std::string const basename = (slash_index == std::string::npos) ? argv0 : argv0.substr(slash_index + 1);
 
                 if (basename != executable) {
                     continue;
@@ -3952,7 +4010,7 @@ public:
             constexpr thread_entry(const char* m, u32 t) : hash(constexpr_hash::get(m)), threads(t) {}
         };
 
-        enum class cpu_type {
+        enum class cpu_type : u8 {
             INTEL_I,
             INTEL_XEON,
             AMD
@@ -3964,8 +4022,9 @@ public:
             struct hasher {
                 static u32 crc32_sw(u32 crc, char data) {
                     crc ^= static_cast<u8>(data);
-                    for (int i = 0; i < 8; ++i)
+                    for (int i = 0; i < 8; ++i) {
                         crc = (crc >> 1) ^ ((crc & 1) ? 0x82F63B78u : 0);
+                    }
                     return crc;
                 }
 
@@ -3982,7 +4041,7 @@ public:
             };
 
             std::string model_string;
-            const char* debug_tag = "";
+            const char* debug_tag = ""; // NOLINT(clang-analyzer-deadcode.DeadStores)
 
             if (type == cpu_type::AMD) {
                 if (!cpu::is_amd()) {
@@ -4017,7 +4076,9 @@ public:
                 model_string = model.string;
             }
 
-            if (model_string.empty()) return false;
+            if (model_string.empty()) {
+                return false;
+            }
 
             debug(debug_tag, ": CPU model = ", model_string);
 
@@ -4034,7 +4095,7 @@ public:
             const auto hash_func = hasher::get();
 
             for (size_t i = 0; str[i] != '\0'; ) {
-                char c = str[i];
+                char const c = str[i];
                 if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) {
                     i++;
                     continue;
@@ -4053,10 +4114,14 @@ public:
                         (k == '-') // models have hyphen
                     );
     
-                    if (!is_valid) break;
+                    if (!is_valid) {
+                        break;
+                    }
 
                     if (current_len >= max_model_len) {
-                        while (str[j] != '\0' && str[j] != ' ') j++; // fast forward to space/null
+                        while (str[j] != '\0' && str[j] != ' ') {
+                            j++; // fast forward to space/null
+                        }
                         break;
                     }
 
@@ -4069,7 +4134,9 @@ public:
                     */
 
                     // convert to lowercase on-the-fly to match compile-time keys
-                    if (type == cpu_type::AMD && (k >= 'A' && k <= 'Z')) k += 32;
+                    if (type == cpu_type::AMD && (k >= 'A' && k <= 'Z')) {
+                        k += 32;
+                    }
 
                     // since this technique is cross-platform, we cannot use a standard C++ try-catch block to catch a missing CPU instruction
                     // we could use preprocessor directives and add an exception handler (VEH/SEH or SIGHANDLER) but nah
@@ -4545,7 +4612,7 @@ public:
 
             for (size_t i = 0; i < MAX_BRANDS; ++i) {
                 if (core::brand_scoreboard.at(i).score > 0) {
-                    active_brands.push_back(std::make_pair(core::brand_scoreboard.at(i).name, core::brand_scoreboard.at(i).score));
+                    active_brands.emplace_back(std::make_pair(core::brand_scoreboard.at(i).name, core::brand_scoreboard.at(i).score));
                 }
             }
 
@@ -4565,8 +4632,8 @@ public:
             };
 
             // if all brands have a point of 0, return "Unknown"
-            if (active_brands.size() == 0) {                        
-                active_brands.push_back({brand_enum::NULL_BRAND, 1});
+            if (active_brands.empty()) {                        
+                active_brands.emplace_back(brand_enum::NULL_BRAND, 1);
                 memo::brand_list::store(active_brands);
                 return active_brands;
             }
@@ -4579,7 +4646,7 @@ public:
                 const enum brand_enum brand = active_brands.front().first;
 
                 if (brand == brand_enum::HYPERV_ROOT && score > 0) {
-                    active_brands.push_back({brand_enum::NULL_BRAND, 1});
+                    active_brands.emplace_back(brand_enum::NULL_BRAND, 1);
                     remove(brand_enum::HYPERV_ROOT);
                 }
 
@@ -4611,7 +4678,7 @@ public:
                 if (a_hit && b_hit) {
                     remove(a);
                     remove(b);
-                    active_brands.push_back({result, 2});
+                    active_brands.emplace_back(result, 2);
                 }
             };
 
@@ -4625,7 +4692,7 @@ public:
                     remove(a);
                     remove(b);
                     remove(c);
-                    active_brands.push_back({result, 2});
+                    active_brands.emplace_back(result, 2);
                 }
             };
 
@@ -4768,7 +4835,7 @@ public:
         }
 
         static std::string fetch_brand_name(const brand_list_t& list, const size_t index) {
-            return brand_enum_to_string(list[index].first);
+            return brand_enum_to_string(list.at(index).first);
         };
     
         static std::string brand_multiple(const flagset& flags = core::generate_default()) {
@@ -4820,7 +4887,7 @@ public:
     #pragma region "x86"
 #endif
 
-#if 1
+#if 1 //  meant for closing this whole section in the IDE
     /**
      * @brief Check CPUID output of manufacturer ID for known VMs/hypervisors at leaf 0 and 0x40000000-0x40000100
      * @category x86
@@ -4851,7 +4918,7 @@ public:
         const std::string& brand = cpu::get_brand();
 
         // easy shortcut for QEMU
-        if (brand.rfind("QEMU Virtual CPU version", 0) == 0) {
+        if (brand.starts_with("QEMU Virtual CPU version")) {
             return core::add(brand_enum::QEMU);
         }
 
@@ -4877,8 +4944,9 @@ public:
         } };
 
         for (auto& v : checks) {
-            if (brand.size() < v.size)
+            if (brand.size() < v.size) {
                 continue;  // too short to match
+            }
 
             if (brand.find(v.data) != std::string::npos) {
                 debug("CPU_BRAND: match = ", v.data);
@@ -4927,7 +4995,11 @@ public:
     #if (!x86)
         return false;
     #else
-        u32 eax = 0, ebx = 0, ecx = 0, edx = 0;
+        u32 eax = 0;
+        u32 ebx = 0; 
+        u32 ecx = 0; 
+        u32 edx = 0;
+
         cpu::cpuid(eax, ebx, ecx, edx, 1); 
         constexpr u32 HYPERVISOR_MASK = (1u << 31);
 
@@ -4939,11 +5011,10 @@ public:
 
             return true;
         }
-        else {
-            // if hypervisor bit is disabled, but vmaware detects hyper-v signals, we're in an impossible situation (patching)
-            if (util::hyper_x() == HYPERV_ARTIFACT_VM) {
-                return true;
-            }
+
+        // if hypervisor bit is disabled, but vmaware detects hyper-v signals, we're in an impossible situation (patching)
+        if (util::hyper_x() == HYPERV_ARTIFACT_VM) {
+            return true;
         }
 
         return false;
@@ -4964,7 +5035,7 @@ public:
             return false;
         }
 
-        char out[sizeof(i32) * 4 + 1] = { 0 }; // e*x size + number of e*x registers + null terminator
+        char out[(sizeof(i32) * 4) + 1] = { 0 }; // e*x size + number of e*x registers + null terminator
         cpu::cpuid(reinterpret_cast<int*>(out), cpu::leaf::hypervisor);
 
         debug("HYPERVISOR_STR: \neax: ", static_cast<u32>(out[0]),
@@ -5019,7 +5090,8 @@ public:
                 return false;
             }
 
-            u32 unused, eax = 0;
+            u32 unused = 0;
+            u32 eax = 0;
             cpu::cpuid(eax, unused, unused, unused, 1);
 
             auto is_k7 = [](const u32 eax) noexcept -> bool {
@@ -5130,19 +5202,21 @@ public:
                     // trim
                     size_t a = 0; 
                     
-                    while (a < s.size() && std::isspace(static_cast<u8>(s[a]))) {
+                    while (a < s.size() && std::isspace(static_cast<u8>(s[a]))) { // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
                         ++a;
                     }
 
                     size_t b = s.size();
-                    
-                    while (b > a && std::isspace(static_cast<u8>(s[b - 1]))) {
+
+                    while (b > a && std::isspace(static_cast<u8>(s[b - 1]))) { // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
                         --b;
                     }
 
                     if (b > a) {
                         for (size_t k = a; k < b; ++k) {
-                            if (s[k] == ',' || s[k] == '-') return true;
+                            if (s[k] == ',' || s[k] == '-') { // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+                                return true;
+                            }
                         }
                         return false;
                     }
@@ -5158,7 +5232,8 @@ public:
 
             std::string line;
             int processors = 0;
-            int cur_phys = -1, cur_core = -1;
+            int cur_phys = -1;
+            int cur_core = -1;
             std::vector<std::pair<int, int>> cores;
     
             while (std::getline(cpuinfo, line)) {
@@ -5172,7 +5247,10 @@ public:
                 }
     
                 auto pos = line.find(':');
-                if (pos == std::string::npos) continue;
+                if (pos == std::string::npos) {
+                    continue;
+                }
+
                 std::string key = line.substr(0, pos);
                 std::string val = line.substr(pos + 1);
 
@@ -5209,7 +5287,7 @@ public:
             if (!cores.empty() && processors > 0) {
                 std::sort(cores.begin(), cores.end());
                 cores.erase(std::unique(cores.begin(), cores.end()), cores.end());
-                int physical_cores = static_cast<int>(cores.size());
+                int const physical_cores = static_cast<int>(cores.size());
                 return processors > physical_cores;
             }
             return false;
@@ -5230,10 +5308,10 @@ public:
                 if (smt) {
                     debug(info.debug_tag, ": Expected  ", info.expected_threads, " threads");
                     return true;
-                } else {
-                    debug(info.debug_tag, ": Expected ", info.expected_threads, " threads, but found SMT disabled");
-                    return false;
-                }         
+                } 
+
+                debug(info.debug_tag, ": Expected ", info.expected_threads, " threads, but found SMT disabled");
+                return false;
             }
         }
         return false;
@@ -5250,7 +5328,10 @@ public:
     #if (!x86)
         return false;
     #else
-        u32 eax = 0, ebx = 0, ecx = 0, edx = 0;
+        u32 eax = 0;
+        u32 ebx = 0;
+        u32 ecx = 0;
+        u32 edx = 0;
         cpu::cpuid(eax, ebx, ecx, edx, 0x40000001);
 
         constexpr u32 simplevisor = 0x00766853; // " vhS"
@@ -5270,26 +5351,46 @@ public:
                 return false;
             }
 
-            u32 l1_eax = 0, l1_ebx = 0, l1_ecx = 0, l1_edx = 0;
-            u32 vb_eax = 0, vb_ebx = 0, vb_ecx = 0, vb_edx = 0;
-            u32 v1f_eax = 0, v1f_ebx = 0, v1f_ecx = 0, v1f_edx = 0;
+            u32 l1_eax = 0;
+            u32 l1_ebx = 0; 
+            u32 l1_ecx = 0; 
+            u32 l1_edx = 0;
+            
+            u32 vb_eax = 0;
+            u32 vb_ebx = 0; 
+            u32 vb_ecx = 0; 
+            u32 vb_edx = 0;
+            
+            u32 v1f_eax = 0;
+            u32 v1f_ebx = 0; 
+            u32 v1f_ecx = 0; 
+            u32 v1f_edx = 0;
 
-            u32 aba_start = 0, aba_end = 0;
+            u32 aba_start = 0;
+            u32 aba_end = 0;
+
             u32 unused = 0;
             int retries = 0;
 
             // triple-read ABA pattern to detect thread migration and bounded to 8 retries
             // leaf 1's Initial APIC ID is the ABA guard
-            do {
+            for (;;) {
                 cpu::cpuid(l1_eax, l1_ebx, l1_ecx, l1_edx, 1, 0);
                 aba_start = (l1_ebx >> 24) & 0xFF; // Initial APIC ID
 
-                if (has_leaf_b)  cpu::cpuid(vb_eax, vb_ebx, vb_ecx, vb_edx, 0x0B, 0);
-                if (has_leaf_1f) cpu::cpuid(v1f_eax, v1f_ebx, v1f_ecx, v1f_edx, 0x1F, 0);
+                if (has_leaf_b) {
+                    cpu::cpuid(vb_eax, vb_ebx, vb_ecx, vb_edx, 0x0B, 0);
+                }
+
+                if (has_leaf_1f) {
+                    cpu::cpuid(v1f_eax, v1f_ebx, v1f_ecx, v1f_edx, 0x1F, 0);
+                }
 
                 cpu::cpuid(unused, l1_ebx, unused, unused, 1, 0);
                 aba_end = (l1_ebx >> 24) & 0xFF;
-            } while (aba_start != aba_end && ++retries < 8);
+
+                if (aba_start == aba_end || ++retries >= 8) { break; }
+            }
 
             // If we hit the retry limit and the thread is still migrating, 
             // abort the check to prevent false positives
@@ -5338,7 +5439,10 @@ public:
                 return false;
             }
 
-            u32 l7_eax = 0, l7_ebx = 0, l7_ecx = 0, l7_edx = 0;
+            u32 l7_eax = 0;
+            u32 l7_ebx = 0;
+            u32 l7_ecx = 0;
+            u32 l7_edx = 0;
             cpu::cpuid(l7_eax, l7_ebx, l7_ecx, l7_edx, 7, 0);
 
             // Intel enumerates hardware mitigations in Leaf 7.0.EDX:
@@ -5372,7 +5476,9 @@ public:
     #if (!x86)
         return false;
     #else
-        u32 unused, ecx, edx = 0;
+        u32 unused = 0;
+        u32 ecx = 0; 
+        u32 edx = 0;
         cpu::cpuid(unused, unused, ecx, edx, 0x40000003);
 
         constexpr u32 ECX_SIG = 0x4D4D5645u; // 'EVMM' -> 0x4D4D5645
@@ -6045,9 +6151,9 @@ public:
 
         if (util::exists(chassis)) {
             return (stoi(util::read_file(chassis)) == 1);
-        } else {
-            debug("CTYPE: ", "file doesn't exist");
         }
+
+        debug("CTYPE: ", "file doesn't exist");
 
         return false;
     }
@@ -6089,17 +6195,25 @@ public:
         if (!result || result->empty()) {
             debug("DMIDECODE: ", "invalid output");
             return false;
-        } else if (*result == "QEMU") {
-            return core::add(brand_enum::QEMU);
-        } else if (*result == "VirtualBox") {
-            return core::add(brand_enum::VBOX);
-        } else if (*result == "KVM") {
-            return core::add(brand_enum::KVM);
-        } else if (std::atoi(result->c_str()) >= 1) {
-            return true;
-        } else {
-            debug("DMIDECODE: ", "output = ", *result);
         }
+        
+        if (*result == "QEMU") {
+            return core::add(brand_enum::QEMU);
+        }
+        
+        if (*result == "VirtualBox") {
+            return core::add(brand_enum::VBOX);
+        }
+        
+        if (*result == "KVM") {
+            return core::add(brand_enum::KVM);
+        } 
+        
+        if (std::strtol(result->c_str(), nullptr, 10) >= 1) {
+            return true;
+        }
+         
+        debug("DMIDECODE: ", "output = ", *result);
 
         return false;
     }
@@ -6114,22 +6228,26 @@ public:
         struct fdguard {
             int fd;
             explicit fdguard(int fd = -1) : fd(fd) {}
-            ~fdguard() { if (fd != -1) ::close(fd); }
+            ~fdguard() { if (fd != -1) { ::close(fd); } }
             int get() const { return fd; }
-            int release() { int tmp = fd; fd = -1; return tmp; }
+            int release() { 
+                const int tmp = fd; 
+                fd = -1; 
+                return tmp; 
+            }
         };
 
         u8 mac[6] = { 0 };
-        struct ifreq ifr;
-        struct ifconf ifc;
+        struct ifreq ifr{};
+        struct ifconf ifc{};
         char buf[1024];
         int success = 0;
 
-        int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+        int const sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
         if (sock == -1) {
             return false;
         }
-        fdguard sockGuard(sock); // will close on function exit
+        const fdguard sockGuard(sock); // will close on function exit
 
         ifc.ifc_len = sizeof(buf);
         ifc.ifc_buf = buf;
@@ -6142,9 +6260,9 @@ public:
         const struct ifreq* end = it + (ifc.ifc_len / sizeof(struct ifreq));
 
         for (; it != end; ++it) {
-            std::size_t name_len = std::min<std::size_t>(sizeof(ifr.ifr_name) - 1, strlen(it->ifr_name));
+            std::size_t const name_len = std::min<std::size_t>(sizeof(ifr.ifr_name) - 1, strlen(it->ifr_name));
             std::memcpy(ifr.ifr_name, it->ifr_name, name_len);
-            ifr.ifr_name[name_len] = '\0';
+            *(ifr.ifr_name + name_len) = '\0';
 
             if (ioctl(sockGuard.get(), SIOCGIFFLAGS, &ifr) != 0) {
                 return false;
@@ -6180,9 +6298,9 @@ public:
             return false;
         }
 
-        const u32 prefix = (u32)mac[0]
-            | ((u32)mac[1] << 8)
-            | ((u32)mac[2] << 16);
+        const u32 prefix = static_cast<u32>(mac[0])
+            | (static_cast<u32>(mac[1]) << 8)
+            | (static_cast<u32>(mac[2]) << 16);
 
         constexpr u32 VBOX = 0x270008;  // 08:00:27
         constexpr u32 VMW1 = 0x29000C;  // 00:0C:29
@@ -6195,14 +6313,17 @@ public:
         if (prefix == VBOX) {
             return core::add(brand_enum::VBOX);
         }
-        else if (prefix == VMW1 || prefix == VMW2
+        
+        if (prefix == VMW1 || prefix == VMW2
             || prefix == VMW3 || prefix == VMW4) {
             return core::add(brand_enum::VMWARE);
         }
-        else if (prefix == XEN) {
+        
+        if (prefix == XEN) {
             return core::add(brand_enum::XEN);
         }
-        else if (prefix == PAR) {
+        
+        if (prefix == PAR) {
             return core::add(brand_enum::PARALLELS);
         }
 
@@ -6234,18 +6355,20 @@ public:
         if (!result || result->empty()) {
             return false;
         }
-        else if (*result == "KVM") {
+        
+        if (*result == "KVM") {
             return core::add(brand_enum::KVM);
         }
-        else if (*result == "QEMU") {
+        
+        if (*result == "QEMU") {
             return core::add(brand_enum::QEMU);
         }
-        else if (std::atoi(result->c_str())) {
+        
+        if (std::strtol(result->c_str(), nullptr, 10)) {
             return true;
         }
-        else {
-            debug("DMESG: ", "output = ", *result);
-        }
+
+        debug("DMESG: ", "output = ", *result);
 
         return false;
     #endif
@@ -6352,7 +6475,9 @@ public:
             return false;
         }
 
-        u32 eax, unused = 0;
+        u32 eax = 0;
+        u32 unused = 0;
+
         cpu::cpuid(eax, unused, unused, unused, encrypted_memory_capability);
 
         if (!(eax & (1 << 1))) {
@@ -6378,8 +6503,8 @@ public:
         }
 
         if (result & (static_cast<u64>(1) << 2)) { return core::add(brand_enum::AMD_SEV_SNP); }
-        else if (result & (static_cast<u64>(1) << 1)) { return core::add(brand_enum::AMD_SEV_ES); }
-        else if (result & 1) { return core::add(brand_enum::AMD_SEV); }
+        if (result & (static_cast<u64>(1) << 1)) { return core::add(brand_enum::AMD_SEV_ES); }
+        if (result & 1) { return core::add(brand_enum::AMD_SEV); }
 
         return false;
     #else
@@ -6457,7 +6582,7 @@ public:
             return false;
         }
 
-        struct dirent* entry;
+        const struct dirent* entry{};
         int count = 0;
 
         while ((entry = readdir(dir)) != nullptr) {
@@ -6533,20 +6658,20 @@ public:
             return false;
         }
 
-        int fd = open("/dev/kmsg", O_RDONLY | O_NONBLOCK);
+        const int fd = open("/dev/kmsg", O_RDONLY | O_NONBLOCK);
         if (fd < 0) {
             debug("KMSG: Failed to open /dev/kmsg");
             return false;
         }
 
-        char buffer[1024];
+        char buffer[1024] = {};
         std::stringstream ss;
 
         while (true) {
-            ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
+            const ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
 
             if (bytes_read > 0) {
-                buffer[bytes_read] = '\0';
+                *(buffer + bytes_read) = '\0';
                 ss << buffer;
             } else if (bytes_read == 0) {
                 usleep(100000); // Sleep for 100 milliseconds
@@ -6634,7 +6759,7 @@ public:
         }
 
         auto dmesg_output = util::sys_result("dmesg");
-        const std::string dmesg_o = *dmesg_output;
+        const std::string& dmesg_o = *dmesg_output;
 
         if (dmesg_o.empty()) {
             return false;
@@ -6726,8 +6851,10 @@ public:
             if (content.empty()) {
                 continue;
             }
-            char* data = &content[0];
+
+            char* data = content.data();
             const size_t len = content.size();
+
             for (size_t i = 0; i < len; ++i) {
                 if (data[i] >= 'A' && data[i] <= 'Z') {
                     data[i] |= 0x20;
@@ -6743,8 +6870,7 @@ public:
                         if (smbios_vm_bit()) {
                             return core::add(brand_enum::AWS_NITRO);
                         }
-                    }
-                    else {
+                    } else {
                         return core::add(vm_string.second);
                     }
                 }
@@ -6920,14 +7046,15 @@ public:
         bool ppid_match = false;
 
         auto parse_number = [&](const std::string& prefix) -> int {
-            if (line.compare(0, prefix.size(), prefix) != 0) {
+            if (!line.starts_with(prefix)) {
                 return -1;
             }
+
             int num = 0;
             for (size_t i = prefix.size(); i < line.size(); ++i) {
-                u8 ch = static_cast<u8>(line[i]);
+                const u8 ch = static_cast<u8>(line.at(i));
                 if (std::isdigit(ch)) {
-                    num = num * 10 + (ch - '0');
+                    num = (num * 10) + (ch - '0');
                 }
                 else if (num > 0) {
                     break;
@@ -6937,12 +7064,12 @@ public:
         };
 
         while (std::getline(status_file, line)) {
-            int pid = parse_number("Pid:");
+            const int pid = parse_number("Pid:");
             if (pid == 1) {
                 pid_match = true;
             }
 
-            int ppid = parse_number("PPid:");
+            const int ppid = parse_number("PPid:");
             if (ppid == 0) {
                 ppid_match = true;
             }
@@ -6962,7 +7089,9 @@ public:
      * @implements VM::TEMPERATURE
      */
     [[nodiscard]] static bool temperature() {
-        if (util::exists("/sys/class/thermal/cooling_device0")) return false;
+        if (util::exists("/sys/class/thermal/cooling_device0")) {
+            return false;
+        }
         return (!util::exists("/sys/class/thermal/thermal_zone0/"));
     }
 
@@ -7018,7 +7147,7 @@ public:
         size_t pos = 0;
 
         while (pos < contents.size()) {
-            size_t end = contents.find('\n', pos);
+            const size_t end = contents.find('\n', pos);
             std::string line = contents.substr(pos, end == std::string::npos ? end : end - pos);
             pos = (end == std::string::npos) ? contents.size() : end + 1;
 
@@ -7093,7 +7222,7 @@ public:
 
         // Linux Implementation (SIDT only)
     #if (LINUX && (GCC || CLANG) && x86)
-        u8 values[10] = { 0 };
+        u8 values[10] = { 0 }; // NOLINT(misc-const-correctness)
 
         fflush(stdout);
 
@@ -7109,7 +7238,9 @@ public:
             }
         #endif
 
-            if (values[9] == 0x00) found = true; // 10th byte in x64 mode
+            if (values[9] == 0x00) {
+                found = true; // 10th byte in x64 mode
+            }
         #elif (x86_32)
             // 32-bit Linux: IDT descriptor is 6 bytes (2-byte limit + 4-byte base)
             __asm__ __volatile__("sidt %0" : "=m"(values));
@@ -7319,7 +7450,7 @@ public:
         }
 
         for (std::size_t i = prefix_len; i < hostname.size(); ++i) {
-            if (!std::isalnum(static_cast<unsigned char>(hostname[i]))) {
+            if (!std::isalnum(static_cast<unsigned char>(hostname.at(i)))) {
                 return false;
             }
         }
@@ -7628,10 +7759,10 @@ public:
             return false;
         }
 
-        struct dir_closer {
+        const struct dir_closer { // NOLINT(cppcoreguidelines-special-member-functions)
             DIR* d;
             explicit dir_closer(DIR* dir) : d(dir) {}
-            ~dir_closer() { if (d) closedir(d); }
+            ~dir_closer() { if (d) { closedir(d); } }
         } dir(raw_dir);
 
         constexpr const char* targets[] = {
@@ -7643,38 +7774,45 @@ public:
             "Xen"
         };
 
-        struct dirent* entry;
-        constexpr long MAX_TABLE_SIZE = 8 * 1024 * 1024;
+        struct dirent* entry{};
+        constexpr long MAX_TABLE_SIZE = static_cast<long>(8 * 1024 * 1024);
 
         while ((entry = readdir(raw_dir)) != nullptr) {
             // Skip "." and ".."
-            if (strcmp(entry->d_name, ".") == 0 ||
-                strcmp(entry->d_name, "..") == 0)
+            if (
+                (strcmp(entry->d_name, ".") == 0) ||
+                (strcmp(entry->d_name, "..") == 0)
+            ) {
                 continue;
+            }
 
             char path[PATH_MAX];
             snprintf(path, sizeof(path),
                 "/sys/firmware/acpi/tables/%s",
                 entry->d_name);
 
-            int fd = open(path, O_RDONLY);
+            const int fd = open(path, O_RDONLY);
             if (fd == -1) {
                 debug("FIRMWARE: could not open ACPI table ", entry->d_name);
                 continue;
             }
 
-            struct fd_closer {
+            const struct fd_closer {
                 int fd;
                 explicit fd_closer(int f) : fd(f) {}
-                ~fd_closer() { if (fd != -1) close(fd); }
+                ~fd_closer() { 
+                    if (fd != -1) {
+                        close(fd);
+                    }
+                }
             } fdguard(fd);
 
-            struct stat statbuf;
+            struct stat statbuf{};
             if (fstat(fd, &statbuf) != 0 || S_ISDIR(statbuf.st_mode)) {
                 debug("FIRMWARE: skipped ", entry->d_name);
                 continue;
             }
-            long file_size = statbuf.st_size;
+            const long file_size = statbuf.st_size;
             if (file_size <= 0) {
                 debug("FIRMWARE: file empty or error ", entry->d_name);
                 continue;
@@ -7698,19 +7836,25 @@ public:
 
             size_t total = 0;
             while (total < file_size_u) {
-                ssize_t n = read(fdguard.fd, buffer.data() + total, file_size_u - total);
-                if (n <= 0) break; // error or EOF
+                const ssize_t n = read(fdguard.fd, buffer.data() + total, file_size_u - total);
+                if (n <= 0) {
+                    break; // error or EOF
+                }
+
                 total += static_cast<size_t>(n);
             }
+
             if (total != file_size_u) {
                 debug("FIRMWARE: could not read full table ", entry->d_name);
                 continue;
             }
 
             for (const char* target : targets) {
-                size_t target_length = strlen(target);
-                if (target_length > file_size_u)
+                const size_t target_length = strlen(target);
+                if (target_length > file_size_u) {
                     continue;
+                }
+    
                 for (size_t j = 0; j <= file_size_u - target_length; ++j) {
                     if (memcmp(buffer.data() + j, target, target_length) == 0) {
                         enum brand_enum brand = brand_enum::NULL_BRAND;
@@ -7741,9 +7885,9 @@ public:
 
                         if (brand != brand_enum::NULL_BRAND) {
                             return core::add(brand);
-                        } else {
-                            return true;
                         }
+
+                        return true;
                     }
                 }
             }
@@ -7773,8 +7917,13 @@ public:
 
             if (!ec) {
                 for (const auto& entry : dir_iter) {
-                    std::ifstream vf(entry.path() / "vendor"), df(entry.path() / "device");
-                    if (!vf || !df) continue;
+                    std::ifstream vf(entry.path() / "vendor");
+                    std::ifstream df(entry.path() / "device");
+
+                    if (!vf || !df) {
+                        continue;
+                    }
+
                     u16 vid = 0; u32 did = 0;
                     vf >> std::hex >> vid;
                     df >> std::hex >> did;
@@ -7868,24 +8017,33 @@ public:
                 const wchar_t* v = p;
                 p += 4;
                 const wchar_t* d = wcsstr(v + 4, L"DEV_");
-                if (d && (d - v) < 64) {
-                    unsigned long parsed_v = 0;
-                    size_t c_v = 0;
-                    if (parse_hex(v + 4, 4, SIZE_MAX, parsed_v, c_v)) {
-                        const wchar_t* dev_start = const_cast<wchar_t*>(d + 4);
-                        const wchar_t* amp_after_dev = wcschr(dev_start, L'&');
-                        const size_t dev_len = amp_after_dev ? static_cast<size_t>(amp_after_dev - dev_start) : wcslen(dev_start);
 
-                        // for HDAUDIO expect 4 digits and for PCI allow up to 8
-                        if (dev_len > 0 && dev_len <= 8) {
-                            unsigned long parsed_d = 0;
-                            size_t c_d = 0;
-                            // parse exactly devLen digits (fail if any char is non-hex)
-                            if (parse_hex(dev_start, 8, dev_len, parsed_d, c_d) && c_d == dev_len) {
-                                add_device(static_cast<u16>(parsed_v & 0xFFFFu), static_cast<u32>(parsed_d));
-                            }
-                        }
-                    }
+                if (!(d && (d - v) < 64)) {
+                    continue;
+                }
+
+                unsigned long parsed_v = 0;
+                size_t c_v = 0;
+
+                if (!parse_hex(v + 4, 4, SIZE_MAX, parsed_v, c_v)) {
+                    continue;
+                }
+
+                const wchar_t* dev_start = const_cast<wchar_t*>(d + 4);
+                const wchar_t* amp_after_dev = wcschr(dev_start, L'&');
+                const size_t dev_len = amp_after_dev ? static_cast<size_t>(amp_after_dev - dev_start) : wcslen(dev_start);
+
+                // for HDAUDIO expect 4 digits and for PCI allow up to 8
+                if (!(dev_len > 0 && dev_len <= 8)) {
+                    continue;
+                }
+
+                unsigned long parsed_d = 0;
+                size_t c_d = 0;
+
+                // parse exactly devLen digits (fail if any char is non-hex)
+                if (parse_hex(dev_start, 8, dev_len, parsed_d, c_d) && c_d == dev_len) {
+                    add_device(static_cast<u16>(parsed_v & 0xFFFFu), static_cast<u32>(parsed_d));
                 }
             }
         };
@@ -8020,9 +8178,10 @@ public:
         }
         #endif
 
-        for (auto& d : devices) {
+        for (const auto d : devices) {
             const u64 id64 = (static_cast<u64>(d.vendor_id) << 32) | d.device_id;
             const u32 id32 = (static_cast<u32>(d.vendor_id) << 16) | static_cast<u32>(d.device_id);
+
             switch (id32) {
                 // Red Hat + Virtio
                 case 0x1af40022: case 0x1af41000: case 0x1af41001: case 0x1af41002:
@@ -8157,14 +8316,14 @@ public:
             const u8* bmp = buffer.data() + info->bitmap_offset;
             const size_t size = static_cast<size_t>(needed) - info->bitmap_offset;
         #else
-            int fd = open("/sys/firmware/acpi/bgrt/image", O_RDONLY);
+            const int fd = open("/sys/firmware/acpi/bgrt/image", O_RDONLY);
             if (fd < 0)
             {
                 debug("BOOT_LOGO: failed to open /sys/firmware/acpi/bgrt/image");
                 return false;
             }
 
-            off_t size = lseek(fd, 0, SEEK_END);
+            const off_t size = lseek(fd, 0, SEEK_END);
             if (size <= 0)
             {
                 debug("BOOT_LOGO: failed to seek to the end");
@@ -8176,11 +8335,11 @@ public:
 
             std::vector<u8> buffer(size);
             ssize_t read_size = 0;
-            size_t off = 0;
-            do
-            {
+            const size_t off = 0;
+            for (;;) {
                 read_size = read(fd, buffer.data() + off, size - off);
-            } while (read_size > 0);
+                if (read_size <= 0) { break; }
+            }
 
             close(fd);
             if (read_size < 0)
@@ -8248,67 +8407,81 @@ public:
             // case 0x9502cb33: return core::add(brand_enum::VBOX); // conflicts with some MSI logo images
             default:         return false;
         }
-    #else
+        #else
         return false;
-    #endif
+        #endif
     }
 
-
+    
     /**
-     * @brief Check for serial numbers of virtual disks
-     * @category Windows
-     * @implements VM::DISK_SERIAL
-     */
+    * @brief Check for serial numbers of virtual disks
+    * @category Windows
+    * @implements VM::DISK_SERIAL
+    */
     [[nodiscard]] static bool disk_serial_number() {
         bool result = false;
 
         // helper to detect QEMU instances based on default hard drive serial patterns
         // QEMU drives often start with "QM000" followed by digits
         auto is_qemu_serial = [](const char* str) noexcept -> bool {
-            if ((str[0] & 0xDF) != 'Q') return false;
-            if ((str[1] & 0xDF) != 'M') return false;
-
+            if ((str[0] & 0xDF) != 'Q') { 
+                return false; 
+            }
+            
+            if ((str[1] & 0xDF) != 'M') { 
+                return false; 
+            }
+            
             // we check byte-by-byte to be safe regarding alignment,
             // though a 32-bit integer check (0x30303030) could be used if alignment is guaranteed
             // we also essentially check for null termination safety here because '\0' != '0'
             return str[2] == '0' && str[3] == '0' && str[4] == '0' && str[5] == '0';
         };
-
+        
         // helper to detect VirtualBox instances
         // VirtualBox uses a specific serial format "VB" followed by hex segments
         auto is_vbox_serial = [](const char* str, size_t len) noexcept -> bool {
             // format: VB12345678-12345678 (19 chars)
-            if (len != 19) return false;
-
+            if (len != 19) {
+                return false;
+            }
+            
             if ((str[0] & 0xDF) != 'V' || (str[1] & 0xDF) != 'B') {
                 return false;
             }
-            if (str[10] != '-') return false;
-
+            if (str[10] != '-') {
+                return false;
+            }
+            
             auto is_hex = [](char c) noexcept -> bool {
-                const char lower = c | 0x20;
+                const char lower = static_cast<char>(c | 0x20);
                 return (c >= '0' && c <= '9') 
-                    || (lower >= 'a' && lower <= 'f');
+                || (lower >= 'a' && lower <= 'f');
             };
-
+            
             for (size_t i = 2; i < 10; ++i) {
-                if (!is_hex(str[i])) return false;
+                if (!is_hex(str[i])) {
+                    return false;
+                }
             }
-
+            
             for (size_t i = 11; i < 19; ++i) {
-                if (!is_hex(str[i])) return false;
+                if (!is_hex(str[i])) {
+                    return false;
+                }
             }
-
+            
             return true;
         };
+        
+        #if (WINDOWS)
 
-    #if (WINDOWS)
         auto strnlen = [](const char* s, size_t max) noexcept -> size_t {
             const void* p = memchr(s, 0, max);
             if (!p) return max;
             return static_cast<size_t>(static_cast<const char*>(p) - s);
         };
-
+        
         using NtOpenFile_t = NTSTATUS(__stdcall*)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK, ULONG, ULONG);
         using NtDeviceIoControlFile_t = NTSTATUS(__stdcall*)(HANDLE, HANDLE, PVOID, PVOID, PIO_STATUS_BLOCK, ULONG, PVOID, ULONG, PVOID, ULONG);
         using NtAllocateVirtualMemory_t = NTSTATUS(__stdcall*)(HANDLE, PVOID*, ULONG_PTR, PSIZE_T, ULONG, ULONG);
@@ -8483,72 +8656,60 @@ public:
             }
             nt_close(device);
         }
+
+        // If we couldn't open any physical drives (not even read permissions) it's weird so we flag it.
+        if (successful_opens == 0) {
+            debug("DISK_SERIAL: No physical drives detected");
+            return true;
+        }
     #else
         DIR* dir = opendir("/sys/block");
-        if (!dir)
+        if (!dir) {
             return false;
+        }
 
-        struct dirent* ent;
+        struct dirent* ent{};
+
         while ((ent = readdir(dir))) {
             const char* name = ent->d_name;
-            if (name[0] == '.')
+            if (name[0] == '.') {
                 continue;
+            }
 
-            if (!strncmp(name, "nvme", 4)
-                || !strncmp(name, "sd", 2)
-                || !strncmp(name, "sg", 2)
-                || !strncmp(name, "nvme", 4)
-                || !strncmp(name, "hd", 2)
-                || !strncmp(name, "vd", 2))
-            {
-                size_t len = strlen(name);
-
+            if (!strncmp(name, "nvme", 4) ||
+                !strncmp(name, "sd", 2) ||
+                !strncmp(name, "sg", 2) ||
+                !strncmp(name, "hd", 2) ||
+                !strncmp(name, "vd", 2)
+            ) {
                 const char sys_block_str[] = "/sys/block/";
                 const char device_serial_str[] = "/device/serial";
 
                 // /sys/block/%s/device/serial
                 char buf[sizeof(dirent::d_name) + sizeof(sys_block_str) + sizeof(device_serial_str)];
+                snprintf(buf, sizeof(buf), "%s%s%s", sys_block_str, name, device_serial_str);
 
-                size_t off = 0;
-                memcpy(buf + off, sys_block_str, sizeof(sys_block_str)-1); 
-                off += sizeof(sys_block_str)-1;
-
-                memcpy(buf + off, name, len);
-                off += len;
-
-                memcpy(buf + off, device_serial_str, sizeof(device_serial_str)); 
-
-                int fd = open(buf, O_RDONLY);
-                if (fd < 0)
+                const int fd = open(buf, O_RDONLY);
+                if (fd < 0) {
                     continue;
+                }
 
-                char serial[1024];
-                ssize_t rsize = read(fd, serial, sizeof(serial)-1);
-                serial[rsize] = '\0';
+                char serial[1024] = {};
+                const ssize_t rsize = read(fd, serial, sizeof(serial)-1);
                 close(fd);
-                if (rsize < 0)
+                if (rsize < 0) {
                     continue;
+                }
 
                 debug("DISK_SERIAL: ", (const char*)serial);
-                if (is_qemu_serial(serial) || is_vbox_serial(serial, rsize))
-                {
-                    closedir(dir);
-                    return true;
+                if (is_qemu_serial(serial) || is_vbox_serial(serial, rsize)) {
+                    result = true;
                 }
             }
         }
 
         closedir(dir);
     #endif
-
-    #if (WINDOWS)
-		// If we couldn't open any physical drives (not even read permissions) it's weird so we flag it.
-        if (successful_opens == 0) {
-            debug("DISK_SERIAL: No physical drives detected");
-            return true;
-        }
-    #endif
-
         return result;
     }
 #endif
@@ -8568,7 +8729,7 @@ public:
     #if (x86 && !APPLE)
         debug("THREADCOUNT: ", "threads = ", memo::threadcount::fetch());
 
-        struct cpu::stepping_struct steps = cpu::fetch_steppings();
+        const struct cpu::stepping_struct steps = cpu::fetch_steppings();
 
         if (cpu::is_celeron(steps)) {
             return false;
@@ -13010,13 +13171,12 @@ public:
      *                                        CORE SECTION                                            *
      *                                                                                                *
      * ============================================================================================== */
-public:
     struct core {
         struct technique {
             u8 points = 0;                // this is the certainty score between 0 and 100
             bool(*run)();                 // this is the technique function itself
 
-            constexpr technique() : points(0), run(nullptr) {}
+            constexpr technique() : run(nullptr) {}
             constexpr technique(u8 points, bool(*run)()) : points(points), run(run) {}
         };
 
@@ -13028,7 +13188,7 @@ public:
 
         // entry for the initialization list
         struct technique_entry {
-            enum_flags id;
+            enum_flags id = enum_flags::NULL_ARG;
             technique tech;
         };
 
@@ -13053,44 +13213,50 @@ public:
         static thread_local u8 last_detected_score;
 
         // 1. one brand, custom score
-        static inline bool add(const brand_enum p_brand, u8 score) noexcept {
+        static bool add(const brand_enum p_brand, u8 score) noexcept {
             return add_score(p_brand, brand_enum::NULL_BRAND, score);
         }
 
         // 2. one brand, default score
-        static inline bool add(const brand_enum p_brand) noexcept {
+        static bool add(const brand_enum p_brand) noexcept {
             return add_score(p_brand, brand_enum::NULL_BRAND, 0);
         }
 
         // 3. two brands, default score
-        static inline bool add(const brand_enum p_brand, const brand_enum extra_brand) noexcept {
+        static bool add(const brand_enum p_brand, const brand_enum extra_brand) noexcept {
             return add_score(p_brand, extra_brand, 0);
         }
 
-        static inline bool add_score(const brand_enum p_brand, const brand_enum extra_brand, u8 score) noexcept {
+        static bool add_score(const brand_enum p_brand, const brand_enum extra_brand, u8 score) noexcept {
             last_detected_brand = p_brand;
             last_detected_score = score; // Store for the engine to read
 
-            brand_score_t brand_score = brand_scoreboard[static_cast<u8>(p_brand)].score;
+            brand_score_t brand_score = brand_scoreboard.at(static_cast<u8>(p_brand)).score;
 
-            brand_scoreboard[static_cast<u8>(p_brand)] = { p_brand, ++brand_score };
+            brand_scoreboard.at(static_cast<u8>(p_brand)) = { p_brand, ++brand_score };
 
             if (extra_brand != brand_enum::NULL_BRAND) {
-                brand_scoreboard[static_cast<u8>(extra_brand)] = { extra_brand, ++brand_score };
+                brand_scoreboard.at(static_cast<u8>(extra_brand)) = { extra_brand, ++brand_score };
             }
 
             return true;
         }
 
         // assert if the flag is enabled, far better expression than typing std::bitset member functions
-        [[nodiscard]] static inline bool is_disabled(const flagset& flags, const u8 flag_bit) noexcept {
-            if (flag_bit >= flags.size()) return true;
+        [[nodiscard]] static bool is_disabled(const flagset& flags, const u8 flag_bit) noexcept {
+            if (flag_bit >= flags.size()) {
+                return true;
+            }
+
             return !flags.test(flag_bit);
         }
 
         // same as above but for checking enabled flags
-        [[nodiscard]] static inline bool is_enabled(const flagset& flags, const u8 flag_bit) noexcept {
-            if (flag_bit >= flags.size()) return false;
+        [[nodiscard]] static bool is_enabled(const flagset& flags, const u8 flag_bit) noexcept {
+            if (flag_bit >= flags.size()) {
+                return false;
+            }
+
             return flags.test(flag_bit);
         }
 
@@ -13127,10 +13293,12 @@ public:
 
             for (size_t i = technique_begin; i < technique_end; ++i) {
                 const enum_flags technique_macro = static_cast<enum_flags>(i);
-                const technique& technique_data = technique_table[i];
+                const technique& technique_data = technique_table.at(i);
 
                 // skip empty entries
-                if (!technique_data.run) continue;
+                if (!technique_data.run) {
+                    continue;
+                }
 
                 // check if the technique is disabled
                 if (core::is_disabled(flags, technique_macro)) {
@@ -13177,10 +13345,7 @@ public:
                 // there's no point in running the rest of the techniques
                 // (unless the threshold is set to be higher, but it's the 
                 // same story here nonetheless, except the threshold is 300)
-                if (
-                    (shortcut) &&
-                    (points >= threshold_points)
-                ) {
+                if (shortcut && (points >= threshold_points)) {
                     return points;
                 }
             }
@@ -13272,7 +13437,7 @@ public:
             generate_default(flags);
 
             for (const enum_flags technique : disabled_techniques) {
-                flags.set((enum_flags)technique, true);
+                flags.set(technique, true);
             }
         }
 
@@ -13284,7 +13449,7 @@ public:
         }
 
         // base handle implementation
-        static inline bool all_enum_flags() {
+        static bool all_enum_flags() {
             return true;
         }
 
@@ -13311,7 +13476,7 @@ public:
 
         // this will generate a std::bitset based on the arguments provided
         template <typename... Args>
-        static VMAWARE_CONSTEXPR flagset arg_handler(Args&&... args) {
+        static VMAWARE_CONSTEXPR flagset arg_handler(Args... args) {
             if (is_type_valid(args...) == false) {
                 throw std::invalid_argument("argument handler only accepts enum_flags variables");
             }
@@ -13325,7 +13490,7 @@ public:
             }
 
             // C++ trick to loop over the variadic arguments one by one
-            int dummy[] = {
+            const int dummy[] = {
                 0, // MSVC guardrail so it doesn't complain
                 (flag_collector.set(static_cast<u32>(args), true), 0)...
             };
@@ -13355,7 +13520,7 @@ public:
 
         // same as above but for VM::disable which only accepts technique flags
         template <typename... Args>
-        static void disabled_arg_handler(Args&&... args) {
+        static void disabled_arg_handler(Args... args) {
             if (is_type_valid(args...) == false) {
                 throw std::invalid_argument("disabled argument handler only accepts enum_flags variables");
             }
@@ -13377,7 +13542,7 @@ public:
         }
     };
 
-public: // START OF PUBLIC FUNCTIONS
+// START OF PUBLIC FUNCTIONS
 
     /**
      * @brief Check for a specific technique based on flag argument
@@ -13434,7 +13599,7 @@ public: // START OF PUBLIC FUNCTIONS
         }
 
         if (flag_bit < technique_end) {
-            const core::technique& pair = core::technique_table[flag_bit];
+            const core::technique& pair = core::technique_table.at(flag_bit);
 
             if (auto run_fn = pair.run) {
                 core::last_detected_brand = brand_enum::NULL_BRAND;
@@ -13451,9 +13616,8 @@ public: // START OF PUBLIC FUNCTIONS
                 memo::cache_store(flag_bit, result, result ? points_to_add : 0, core::last_detected_brand);
                 return result;
             }
-            else {
-                throw_error("Flag is not known or not implemented");
-            }
+
+            throw_error("Flag is not known or not implemented");
         }
 
         return false;
@@ -13479,10 +13643,10 @@ public: // START OF PUBLIC FUNCTIONS
 
         if (is_multiple) {
             return brands::brand_multiple(flags);
-        } else {
-            const enum brand_enum b = brands::brand_single(flags);
-            return brands::brand_enum_to_string(b);
         }
+
+        const enum brand_enum b = brands::brand_single(flags);
+        return brands::brand_enum_to_string(b);
     }
 
 
@@ -13602,9 +13766,9 @@ public: // START OF PUBLIC FUNCTIONS
             [[assume(percent > 0 && percent <= 100)]];
         #endif
 
-        size_t current_index = core::custom_table.size();
+        const size_t current_index = core::custom_table.size();
 
-        core::custom_technique query{
+        const core::custom_technique query{
             percent,
             static_cast<u16>(static_cast<int>(base_technique_count) + static_cast<int>(current_index) + 1),
             detection_func
@@ -13810,7 +13974,7 @@ public: // START OF PUBLIC FUNCTIONS
             throw_error("The flag is not a technique flag");
         }
 
-        core::technique_table[flag].points = percent;
+        core::technique_table.at(flag).points = percent;
     }
 
     /**
@@ -14003,7 +14167,7 @@ public: // START OF PUBLIC FUNCTIONS
                 addition = " an ";
             }
 
-            std::string brand_str = "";
+            std::string brand_str;
 
             // this is basically just to remove the capital "U", 
             // since it doesn't make sense to see "an Unknown"
@@ -14036,12 +14200,12 @@ public: // START OF PUBLIC FUNCTIONS
 
         if (core::is_enabled(flags, DYNAMIC)) {
             if (percent_tmp == 0) { return "Running on baremetal"; }
-            else if (percent_tmp <= 20) { return make_conclusion(very_unlikely); }
-            else if (percent_tmp <= 35) { return make_conclusion(unlikely); }
-            else if (percent_tmp < 50) { return make_conclusion(potentially); }
-            else if (percent_tmp <= 62) { return make_conclusion(might); }
-            else if (percent_tmp <= 75) { return make_conclusion(likely); }
-            else if (percent_tmp < 100) { return make_conclusion(very_likely); }
+            if (percent_tmp <= 20) { return make_conclusion(very_unlikely); }
+            if (percent_tmp <= 35) { return make_conclusion(unlikely); }
+            if (percent_tmp < 50) { return make_conclusion(potentially); }
+            if (percent_tmp <= 62) { return make_conclusion(might); }
+            if (percent_tmp <= 75) { return make_conclusion(likely); }
+            if (percent_tmp < 100) { return make_conclusion(very_likely); }
         }
 
         if (percent_tmp == 100) {
@@ -14067,8 +14231,8 @@ public: // START OF PUBLIC FUNCTIONS
                 if (!check(flag)) {
                     return brand_enum::NULL_BRAND;
                 }
-                if (memo::cache_table[flag].has_value) {
-                    return memo::cache_table[flag].brand_name;
+                if (memo::cache_table.at(flag).has_value) {
+                    return memo::cache_table.at(flag).brand_name;
                 }
                 return brand_enum::NULL_BRAND;
             };
@@ -14079,8 +14243,8 @@ public: // START OF PUBLIC FUNCTIONS
                     return false;
                 }
 
-                const brand_enum bit_brand = memo::cache_table[VM::HYPERVISOR_BIT].brand_name;
-                const brand_enum str_brand = memo::cache_table[VM::HYPERVISOR_STR].brand_name;
+                const brand_enum bit_brand = memo::cache_table.at(VM::HYPERVISOR_BIT).brand_name;
+                const brand_enum str_brand = memo::cache_table.at(VM::HYPERVISOR_STR).brand_name;
 
                 return (
                     (bit_brand == brand_enum::HYPERV_ROOT) || 
@@ -14137,17 +14301,17 @@ public: // START OF PUBLIC FUNCTIONS
         std::string brand;
         std::string type;
         std::string conclusion;
-        bool is_vm;
-        bool is_hardened; 
-        u8 percentage;
-        u8 detected_count;
-        u16 technique_count;
+        bool is_vm = false;
+        bool is_hardened = false;
+        u8 percentage = 0;
+        u8 detected_count = 0;
+        u16 technique_count = 0;
         std::vector<enum_flags> detected_techniques;
         std::vector<std::string> detected_technique_strings;
         std::vector<enum_flags> disabled_techniques;
 
         template <typename ...Args>
-        vmaware(Args&& ...args) {
+        vmaware(Args ...args) {
             const flagset flags = core::arg_handler(args...);
             initialise(flags);
         }
@@ -14169,6 +14333,7 @@ public: // START OF PUBLIC FUNCTIONS
             detected_techniques = VM::detected_enums(flags);
             detected_technique_strings = [&]() -> std::vector<std::string> {
                 std::vector<std::string> tmp{};
+                tmp.reserve(detected_techniques.size());
 
                 for (const auto technique : detected_techniques) {
                     tmp.push_back(VM::flag_to_string(technique));
@@ -14193,7 +14358,7 @@ std::array<VM::core::brand_entry, VM::MAX_BRANDS> VM::core::brand_scoreboard = [
     std::array<VM::core::brand_entry, VM::MAX_BRANDS> arr{};
 
     for (u8 i = 0; i < MAX_BRANDS; i++) {
-        arr[i] = { static_cast<brand_enum>(i), 0 };
+        arr.at(i) = { static_cast<brand_enum>(i), 0 };
     }
 
     return arr;
@@ -14202,7 +14367,7 @@ std::array<VM::core::brand_entry, VM::MAX_BRANDS> VM::core::brand_scoreboard = [
 // initial definitions for cache items because C++ forbids in-class initializations
 std::array<VM::memo::cache_entry, VM::enum_size + 1> VM::memo::cache_table{};
 enum VM::brand_enum VM::memo::single_brand::brand_cache = brand_enum::NULL_BRAND;
-std::string VM::memo::multi_brand::brand_cache = "";
+std::string VM::memo::multi_brand::brand_cache;
 char VM::memo::cpu_brand::brand_cache[128] = { 0 };
 char VM::memo::bios_info::manufacturer[256] = { 0 };
 char VM::memo::bios_info::model[128] = { 0 };
@@ -14366,7 +14531,7 @@ std::array<VM::core::technique, VM::enum_size + 1> VM::core::technique_table = [
     // fill the table based on ID
     for (const auto& entry : entries) {
         if (entry.id < table.size()) {
-            table[entry.id] = entry.tech;
+            table.at(entry.id) = entry.tech;
         }
     }
     return table;

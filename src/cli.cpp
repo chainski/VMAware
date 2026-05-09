@@ -54,7 +54,7 @@ constexpr const char* date = "April 2026";
 std::string bold = "\033[1m";
 std::string underline = "\033[4m";
 std::string ansi_exit = "\x1B[0m";
-std::string red = "\x1B[38;2;239;75;75m"; 
+std::string red = "\x1B[38;2;239;75;75m";
 std::string orange = "\x1B[38;2;255;180;5m";
 std::string green = "\x1B[38;2;94;214;114m";
 std::string red_orange = "\x1B[38;2;247;127;40m";
@@ -100,12 +100,12 @@ u8 supported_count = 0;
 u8 no_perms_count = 0;
 u8 disabled_count = 0;
 
-std::string detected = ("[  " + green + "DETECTED" + ansi_exit + "  ]");
-std::string not_detected = ("[" + red + "NOT DETECTED" + ansi_exit + "]");
-std::string no_support = ("[ " + grey + "NO SUPPORT" + ansi_exit + " ]");
-std::string no_perms = ("[" + grey + "  NO PERMS  " + ansi_exit + "]");
-std::string note = ("[    NOTE    ]");               
-std::string disabled = ("[" + grey + "  DISABLED  " + ansi_exit + "]");
+std::string detected = (std::string("[  ") + green + "DETECTED" + ansi_exit + "  ]");
+std::string not_detected = (std::string("[") + red + "NOT DETECTED" + ansi_exit + "]");
+std::string no_support = (std::string("[ ") + grey + "NO SUPPORT" + ansi_exit + " ]");
+std::string no_perms = (std::string("[") + grey + "  NO PERMS  " + ansi_exit + "]");
+std::string note = "[    NOTE    ]";
+std::string disabled = (std::string("[") + grey + "  DISABLED  " + ansi_exit + "]");
 
 #if (CLI_WINDOWS)
 class win_ansi_enabler_t
@@ -323,7 +323,7 @@ static std::string compute_self_sha256() {
 }
 #endif
 
-[[noreturn]] static void help(void) {
+[[noreturn]] static void help() {
     std::cout << 
 R"(Usage: 
  vmaware [option] [extra]
@@ -357,7 +357,7 @@ Extra:
     std::exit(0);
 }
 
-[[noreturn]] static void version(void) {
+[[noreturn]] static void version() {
     std::cout << "vmaware " << "v" << ver << " (" << date << ")\n\n" <<
     "Derived project of VMAware library at https://github.com/kernelwernel/VMAware\n"
     "License MIT:<https://opensource.org/license/mit>.\n" << 
@@ -376,24 +376,24 @@ static const char* color(const u8 score, const bool is_hardened) {
     }
 
     if (is_hardened) {
-        return green.c_str();
+        return green.data();
     }
 
     if (arg_bitset.test(DYNAMIC)) {
-        if      (score == 0)   { return red.c_str(); }
-        else if (score <= 12)  { return red.c_str(); }
-        else if (score <= 25)  { return red_orange.c_str(); }
-        else if (score < 50)   { return red_orange.c_str(); }
-        else if (score <= 62)  { return orange.c_str(); }
-        else if (score <= 75)  { return green_orange.c_str(); }
-        else if (score < 100)  { return green.c_str(); }
-        else if (score == 100) { return green.c_str(); }
+        if (score == 0)   { return red.data(); }
+        if (score <= 12)  { return red.data(); }
+        if (score <= 25)  { return red_orange.data(); }
+        if (score < 50)   { return red_orange.data(); }
+        if (score <= 62)  { return orange.data(); }
+        if (score <= 75)  { return green_orange.data(); }
+        if (score < 100)  { return green.data(); }
+        if (score == 100) { return green.data(); }
     } else {
         if (score == 100) {
-            return green.c_str();
-        } else {
-            return red.c_str();
+            return green.data();
         }
+        
+        return red.data();
     }
 
     return "";
@@ -585,7 +585,7 @@ static const char* get_vm_description(const std::string& vm_brand) {
         const char* description;
     };
 
-    static const brand_entry table[] = {
+    static const std::array<brand_entry, 71> table = {{
         { VM::brands::VBOX, "Oracle VirtualBox (formerly Sun VirtualBox, Sun xVM VirtualBox and InnoTek VirtualBox) is a free and commercial hosted hypervisor for x86 and Apple ARM64 virtualization developed by Oracle Corporation initially released in 2007. It supports Intel's VT-x and AMD's AMD-V hardware-assisted virtualization, while providing an extensive feature set as a staple of its flexibility and wide use cases." },
         { VM::brands::VMWARE, "VMware is a free and commercial type 2 hypervisor initially released in 1999 and acquired by EMC, then Dell, and finally Broadcom Inc in 2023. It was the first commercially successful company to virtualize the x86 architecture, and has since produced many sub-versions of the hypervisor since its inception. It uses binary translation to re-write the code dynamically for a faster performance." },
         { VM::brands::VMWARE_EXPRESS, "VMware Express (formerly VMware GSX Server Express) was a free entry-level version of VMware's hosted hypervisor for small-scale virtualization. Released in 2003, it offered basic VM management capabilities but lacked advanced features like VMotion. Discontinued in 2006 as VMware shifted focus to enterprise solutions like ESX and vSphere." },
@@ -594,7 +594,7 @@ static const char* get_vm_description(const std::string& vm_brand) {
         { VM::brands::VMWARE_WORKSTATION, "VMware Workstation is a commercial type 2 hypervisor for Windows/Linux hosts, first released in 1999. Enables nested virtualization, 4K display support, and DirectX 11/OpenGL 4.1 acceleration. Popular with developers for testing multi-tier configurations and legacy OS compatibility through its Unity view mode." },
         { VM::brands::VMWARE_FUSION, "VMware Fusion was a macOS-hosted hypervisor (2007-2024) that allowed Intel-based Macs to run Windows/Linux VMs with Metal graphics acceleration and Retina display support. Discontinued due to Apple's transition to ARM64 architecture with Apple Silicon chips, which required significant architectural changes incompatible with x86 virtualization." },
         { VM::brands::VMWARE_HARD, "VMWare Hardener Loader is an open-source detection mitigation loader to harden vmware virtual machines against VM detection for Windows (vista~win10) x64 guests." },
-        { VM::brands::BHYVE, "bhyve (pronounced \"bee hive\", formerly written as BHyVe for \"BSD hypervisor\") is a free type 2 hosted hypervisor initially written for FreeBSD. It can also be used on a number of illumos based distributions including SmartOS, OpenIndiana, and OmniOS. bhyve has a modern codebase and uses fewer resources compared to its competitors. In the case of FreeBSD, the resource management is more efficient." },
+        { VM::brands::BHYVE, R"(bhyve (pronounced "bee hive", formerly written as BHyVe for "BSD hypervisor") is a free type 2 hosted hypervisor initially written for FreeBSD. It can also be used on a number of illumos based distributions including SmartOS, OpenIndiana, and OmniOS. bhyve has a modern codebase and uses fewer resources compared to its competitors. In the case of FreeBSD, the resource management is more efficient.)" },
         { VM::brands::KVM, "KVM is a free and open source module of the Linux kernel released in 2007. It uses hardware virtualization extensions, and has had support for hot swappable vCPUs, dynamic memory management, and Live Migration. It also reduces the impact that memory write-intensive workloads have on the migration process. KVM emulates very little hardware components, and it defers to a higher-level client application such as QEMU." },
         { VM::brands::QEMU, "The Quick Emulator (QEMU) is a free and open-source emulator that uses dynamic binary translation to emulate a computer's processor. It translates the emulated binary codes to an equivalent binary format which is executed by the machine. It provides a variety of hardware and device models for the VM, while often being combined with KVM. However, no concrete evidence of KVM was found for this system." },
         { VM::brands::QEMU_KVM, "QEMU (a free and open-source emulator that uses dynamic binary translation to emulate a computer's processor) is being used with Kernel-based Virtual Machine (KVM, a free and open source module of the Linux kernel) to virtualize hardware at near-native speeds." },
@@ -657,7 +657,7 @@ static const char* get_vm_description(const std::string& vm_brand) {
         { VM::brands::CONNECTIX, "Connectix VirtualPC was the predecessor to Microsoft's VirtualPC. Originally developed as a Macintosh application for System 7.5 and released by Connectix in June 1997, it supported various OS's such as Linux and old versions of Windows. It was bought by Microsoft in February 2003." },
         { VM::brands::CONTAINERD, "Containerd is an industry-standard container runtime used as the core engine beneath Docker, Kubernetes, and other container platforms. It manages the complete container lifecycle including image transfer, storage, execution, and supervision." },
         { VM::brands::NULL_BRAND, "Indicates no detectable virtualization brand. This result may occur on bare-metal systems, unsupported/obscure hypervisors, or when anti-detection techniques (e.g., VM escaping) are employed by the guest environment." }
-    };
+    }};
 
     // Range-based for loop (C++11)
     // std::string operator== checks size first, so this is highly optimized.
@@ -786,15 +786,17 @@ static const char* get_vm_description(const std::string& vm_brand) {
 }
 
 static void checker(const VM::enum_flags flag, const char* message) {
-    std::string enum_name = "";
+    std::string enum_name;
 
     if (arg_bitset.test(ENUMS)) {
         enum_name = grey + " [VM::" + VM::flag_to_string(flag) + "]" + ansi_exit;
     }
 
     if (is_disabled(flag)) {
-        if (!arg_bitset.test(DETECTED_ONLY))
+        if (!arg_bitset.test(DETECTED_ONLY)) {
             std::cout << disabled << " Skipped " << message << enum_name << "\n";
+        }
+
         disabled_count++;
         return;
     }
@@ -876,12 +878,12 @@ static void general(
     bool notes_enabled = false;
    
     if (arg_bitset.test(NO_ANSI)) {
-        detected = ("[  DETECTED  ]");
-        not_detected = ("[NOT DETECTED]");
-        no_support = ("[ NO SUPPORT ]");
-        no_perms = ("[  NO PERMS  ]");
-        note = ("[    NOTE    ]");               
-        disabled = ("[  DISABLED  ]");
+        detected = "[  DETECTED  ]";
+        not_detected = "[NOT DETECTED]";
+        no_support = "[ NO SUPPORT ]";
+        no_perms = "[  NO PERMS  ]";
+        note = "[    NOTE    ]";
+        disabled = "[  DISABLED  ]";
         
         bold = "";
         underline = "";
@@ -1011,7 +1013,7 @@ static void general(
     std::printf("\n");
 
     // struct containing the whole overview of the VM data
-    VM::vmaware vm(VM::MULTIPLE, high_threshold, all, dynamic);
+    const VM::vmaware vm(VM::MULTIPLE, high_threshold, all, dynamic);
 
     // brand manager
     {
@@ -1033,7 +1035,7 @@ static void general(
     // type manager
     {
         if (is_vm_brand_multiple(vm.brand) == false) {
-            std::string current_color = "";
+            std::string current_color;
             std::string type = vm.type;
 
             if (is_anyrun && (type == "Unknown")) {
@@ -1053,13 +1055,13 @@ static void general(
 
     // percentage manager
     {
-        const char* percent_color;
+        const char* percent_color = nullptr;
 
-        if (vm.percentage == 0) { percent_color = red.c_str(); }
-        else if (vm.percentage < 25) { percent_color = red_orange.c_str(); }
-        else if (vm.percentage < 50) { percent_color = orange.c_str(); }
-        else if (vm.percentage < 75) { percent_color = green_orange.c_str(); }
-        else { percent_color = green.c_str(); }
+        if (vm.percentage == 0) { percent_color = red.data(); }
+        else if (vm.percentage < 25) { percent_color = red_orange.data(); }
+        else if (vm.percentage < 50) { percent_color = orange.data(); }
+        else if (vm.percentage < 75) { percent_color = green_orange.data(); }
+        else { percent_color = green.data(); }
 
         std::cout << bold << "VM likeliness: " << ansi_exit << percent_color << static_cast<u32>(vm.percentage) << "%" << ansi_exit << "\n";
     }
@@ -1073,16 +1075,16 @@ static void general(
 
     // detection count manager
     {
-        const char* count_color;
+        const char* count_color = nullptr;
 
         switch (vm.detected_count) {
-        case 0: count_color = red.c_str(); break;
-        case 1: count_color = red_orange.c_str(); break;
-        case 2: count_color = orange.c_str(); break;
-        case 3: count_color = orange.c_str(); break;
-        case 4: count_color = green_orange.c_str(); break;
+        case 0: count_color = red.data(); break;
+        case 1: count_color = red_orange.data(); break;
+        case 2: count_color = orange.data(); break;
+        case 3: count_color = orange.data(); break;
+        case 4: count_color = green_orange.data(); break;
         default:
-            count_color = green.c_str();
+            count_color = green.data();
         }
 
         std::cout <<
@@ -1168,13 +1170,13 @@ static void general(
 
                     if (char_count <= 60) {
                         continue;
+                    }
+
+                    if ((static_cast<unsigned long long>(char_count) - 1) >= (static_cast<unsigned long long>(max_line_length) + 3)) {
+                        it = divided_description.insert(it + 1, "\n");
+                        char_count = it->length() + 1;
                     } else {
-                        if ((static_cast<unsigned long long>(char_count) - 1) >= (static_cast<unsigned long long>(max_line_length) + 3)) {
-                            it = divided_description.insert(it + 1, "\n");
-                            char_count = it->length() + 1;
-                        } else {
-                            continue;
-                        }
+                        continue;
                     }
                 }
 
@@ -1233,47 +1235,46 @@ static void general(
 static void generate_json(const char* output) {
     std::vector<std::string> json;
 
-    json.push_back("{");
-    json.push_back("\n\t\"is_detected\": ");
-    json.push_back(VM::detect() ? "true," : "false,");
-    json.push_back("\n\t\"brand\": \"");
-    json.push_back(VM::brand());
-    json.push_back("\",");
-    json.push_back("\n\t\"conclusion\": \"");
-    json.push_back(VM::conclusion());
-    json.push_back("\",");
-    json.push_back("\n\t\"percentage\": ");
-    json.push_back(std::to_string(static_cast<int>(VM::percentage())));
-    json.push_back(",");
-    json.push_back("\n\t\"detected_technique_count\": ");
-    json.push_back(std::to_string(VM::technique_count));
-    json.push_back(",");
-    json.push_back("\n\t\"vm_type\": \"");
-    json.push_back(VM::type());
-    json.push_back("\",");
-    json.push_back("\n\t\"is_hardened\": ");
-    json.push_back(VM::is_hardened() ? "true," : "false,");
-    json.push_back("\n\t\"detected_techniques\": [");
+    json.emplace_back("{");
+    json.emplace_back("\n\t\"is_detected\": ");
+    json.emplace_back(VM::detect() ? "true," : "false,");
+    json.emplace_back("\n\t\"brand\": \"");
+    json.emplace_back(VM::brand());
+    json.emplace_back("\",");
+    json.emplace_back("\n\t\"conclusion\": \"");
+    json.emplace_back(VM::conclusion());
+    json.emplace_back("\",");
+    json.emplace_back("\n\t\"percentage\": ");
+    json.emplace_back(std::to_string(static_cast<int>(VM::percentage())));
+    json.emplace_back(",");
+    json.emplace_back("\n\t\"detected_technique_count\": ");
+    json.emplace_back(std::to_string(VM::technique_count));
+    json.emplace_back(",");
+    json.emplace_back("\n\t\"vm_type\": \"");
+    json.emplace_back(VM::type());
+    json.emplace_back("\",");
+    json.emplace_back("\n\t\"is_hardened\": ");
+    json.emplace_back(VM::is_hardened() ? "true," : "false,");
+    json.emplace_back("\n\t\"detected_techniques\": [");
 
     const auto detected_status = VM::detected_enums();
 
-    if (detected_status.size() == 0) {
-        json.push_back("]\n}");
-    }
-    else {
+    if (detected_status.empty()) {
+        json.emplace_back("]\n}");
+    } else {
         for (size_t i = 0; i < detected_status.size(); i++) {
-            json.push_back("\n\t\t\"");
-            json.push_back(VM::flag_to_string(detected_status[i]));
+            json.emplace_back("\n\t\t\"");
+            json.emplace_back(VM::flag_to_string(detected_status.at(i)));
 
             if (i == detected_status.size() - 1) {
-                json.push_back("\"");
+                json.emplace_back("\"");
             }
             else {
-                json.push_back("\",");
+                json.emplace_back("\",");
             }
         }
 
-        json.push_back("\n\t]\n}");
+        json.emplace_back("\n\t]\n}");
     }
 
     std::ofstream file(output);
@@ -1343,7 +1344,7 @@ int main(int argc, char* argv[]) {
         { "--json", JSON }
     }};
 
-    std::string potential_null_arg = "";
+    std::string potential_null_arg;
     const char* potential_output_arg = "results.json";
 
     for (i32 i = 1; i < argc; ++i) {
@@ -1355,10 +1356,12 @@ int main(int argc, char* argv[]) {
 
         if (it == table.end()) {
             if (arg_bitset.test(OUTPUT)) {
-                std::ofstream file(arg_string);
+                const std::ofstream file(arg_string);
+
                 if (file.good()) {
                     potential_output_arg = arg_string;
                 }
+
                 arg_bitset.set(OUTPUT, false);
             } else {
                 arg_bitset.set(NULL_ARG);
