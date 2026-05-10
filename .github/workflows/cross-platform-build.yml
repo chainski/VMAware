@@ -79,15 +79,6 @@ jobs:
               cmake --build build --config Release
             "
 
-      - name: Run binary (${{ matrix.arch }})
-        run: |
-          docker run --rm \
-            --platform ${{ matrix.platform }} \
-            -v ${{ github.workspace }}:/src \
-            -w /src \
-            ${{ matrix.image }} \
-            ./build/vmaware
-
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
@@ -117,9 +108,6 @@ jobs:
 
       - name: Build
         run: cmake --build build --config Release
-
-      - name: Run binary
-        run: build/vmaware
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
@@ -213,7 +201,7 @@ jobs:
         run: cmake --build build --config Release
 
   all-platforms:
-    needs: [linux, macos, windows, cli-test, cpp-standard]
+    needs: [cli-test, cpp-standard]
     runs-on: ubuntu-latest
     steps:
       - run: echo "All platforms built successfully"

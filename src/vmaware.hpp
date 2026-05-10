@@ -3639,7 +3639,7 @@ public:
             print_to_stream(ss, std::forward<Args>(message)...);
             std::string msg_content = ss.str();
 
-            if (!printed_messages.contains(msg_content)) {
+            if (printed_messages.find(msg_content) == printed_messages.end()) {
             #if (LINUX || APPLE)
                 constexpr const char* black_bg = "\x1B[48;2;0;0;0m";
                 constexpr const char* bold = "\033[1m";
@@ -4925,7 +4925,7 @@ public:
         const std::string& brand = cpu::get_brand();
 
         // easy shortcut for QEMU
-        if (brand.starts_with("QEMU Virtual CPU version")) {
+        if (brand.rfind("QEMU Virtual CPU version", 0) == 0) {
             return core::add(brand_enum::QEMU);
         }
 
@@ -6859,7 +6859,7 @@ public:
                 continue;
             }
 
-            char* data = content.data();
+            char* data = &content[0];
             const size_t len = content.size();
 
             for (size_t i = 0; i < len; ++i) {
@@ -7068,7 +7068,7 @@ public:
         bool ppid_match = false;
 
         auto parse_number = [&](const std::string& prefix) -> int {
-            if (!line.starts_with(prefix)) {
+            if (line.rfind(prefix, 0) != 0) {
                 return -1;
             }
 
@@ -7480,7 +7480,7 @@ public:
         return core::add(brand_enum::AZURE_HYPERV);
     }
     template <typename T, size_t N>
-    constexpr bool check_no_nulls(const std::array<T, N>& arr, size_t i = 0) {
+    constexpr bool check_no_nulls(const std::array<T, N>& arr, size_t i = 0) const {
         return (i == N)
             ? true
             : (arr[i] != nullptr && check_no_nulls(arr, i + 1));
@@ -13209,8 +13209,8 @@ public:
         };
 
         // entry for the initialization list
-        struct technique_entry {
-            enum_flags id = enum_flags::NULL_ARG;
+        struct technique_entry { // NOLINT(cppcoreguidelines-pro-type-member-init)
+            enum_flags id;
             technique tech;
         };
 
@@ -13624,12 +13624,6 @@ public:
             throw_error("Flag argument must be a technique flag and not a settings flag");
         }
 
-        #if (MSVC && !CLANG)
-            __assume(flag_bit < technique_end);
-        #elif (VMA_CPP >= 23)
-            [[assume(flag_bit < technique_end)]];
-        #endif
-
         // if the technique is already cached, return the cached value instead
         if (memo::is_cached(flag_bit)) {
             const memo::data_t data = memo::cache_fetch(flag_bit);
@@ -13817,12 +13811,6 @@ public:
         if (percent > 100) {
             throw_error("Percentage parameter must be between 0 and 100");
         }
-        
-        #if (MSVC && !CLANG)
-            __assume(percent > 0 && percent <= 100);
-        #elif (VMA_CPP >= 23)
-            [[assume(percent > 0 && percent <= 100)]];
-        #endif
 
         const size_t current_index = core::custom_table.size();
 
