@@ -39,6 +39,7 @@ Checks: >
     -modernize-avoid-c-arrays,
     -modernize-use-constraints,
     -modernize-type-traits,
+    -modernize-use-starts-ends-with,
     cppcoreguidelines-*,
     -cppcoreguidelines-avoid-magic-numbers,
     -cppcoreguidelines-pro-bounds-pointer-arithmetic,
