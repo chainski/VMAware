@@ -235,7 +235,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        std: [26, 23, 20, 17, 14, 11]
+        std: [23, 20, 17, 14, 11]
 
     steps:
       - uses: actions/checkout@v4

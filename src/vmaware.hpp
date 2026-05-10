@@ -5572,7 +5572,7 @@ public:
         };
 
         // random logical CPU, but exclude the trigger_thread, first, second and last available logical CPUs, avoiding SMT siblings
-        auto get_counter_mask = []() -> DWORD_PTR {
+        auto get_counter_mask = [ct_seed]() -> DWORD_PTR {
             const HANDLE current_process = reinterpret_cast<HANDLE>(-1LL);
             DWORD_PTR proc_mask = 0, sys_mask = 0;
             GetProcessAffinityMask(current_process, &proc_mask, &sys_mask);
