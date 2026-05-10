@@ -116,7 +116,7 @@ endif()
 
 # add executable
 add_executable(${TARGET} "src/cli.cpp")
-target_compile_features(${TARGET} PRIVATE cxx_std_20)
+set_property(TARGET ${TARGET} PROPERTY CXX_STANDARD ${CMAKE_CXX_STANDARD})
 
 # debug/release flags (MULTI-CONFIG SAFE)
 # Apply flags per-config using generator expressions

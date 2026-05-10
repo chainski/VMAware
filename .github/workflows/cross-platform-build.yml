@@ -185,8 +185,35 @@ jobs:
           chmod +x build/vmaware
           bash auxiliary/test_cli.sh build/vmaware
 
+  cpp-standard:
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        std: [26, 23, 20, 17, 14, 11]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends g++-14 cmake
+
+      - name: Configure (C++${{ matrix.std }})
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=${{ matrix.std }} \
+            -DCMAKE_CXX_COMPILER=g++-14
+
+      - name: Build (C++${{ matrix.std }})
+        run: cmake --build build --config Release
+
   all-platforms:
-    needs: [linux, macos, windows, cli-test]
+    needs: [linux, macos, windows, cli-test, cpp-standard]
     runs-on: ubuntu-latest
     steps:
       - run: echo "All platforms built successfully"
