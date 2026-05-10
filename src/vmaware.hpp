@@ -5537,7 +5537,7 @@ public:
         #define VMAWARE_STR2(x) #x
         #define VMAWARE_STR(x) VMAWARE_STR2(x)
 
-        const u32 ct_seed = []() constexpr -> u32 {
+        const u32 ct_seed = []() -> u32 {
             constexpr char s[] = __DATE__ " " __TIME__ " " __FILE__ " " VMAWARE_STR(__LINE__);
             u32 h = 2166136261u;
             for (char c : s) {

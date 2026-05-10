@@ -25,43 +25,15 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  linux-amd64:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Build (amd64)
-        run: |
-          docker run --rm \
-            --platform linux/amd64 \
-            -v ${{ github.workspace }}:/src \
-            -w /src \
-            debian:bookworm \
-            bash -c "
-              apt-get update -q &&
-              apt-get install -y --no-install-recommends cmake g++ build-essential &&
-              cmake -B build -DCMAKE_BUILD_TYPE=Release &&
-              cmake --build build --config Release
-            "
-
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: vmaware-linux-amd64
-          path: build/vmaware
-          if-no-files-found: error
-          retention-days: 30
-
-  linux-multiarch:
+  linux:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
+          - arch: amd64
+            platform: linux/amd64
+            image: debian:bookworm
           - arch: arm64
             platform: linux/arm64
             image: debian:bookworm
@@ -184,7 +156,7 @@ jobs:
           path: build\Release\vmaware_${{ github.run_number }}_${{ env.SHORT_SHA }}.exe
 
   cli-test:
-    needs: [linux-amd64]
+    needs: [linux]
     runs-on: ubuntu-latest
 
     steps:
@@ -202,7 +174,7 @@ jobs:
           bash auxiliary/test_cli.sh build/vmaware
 
   cpp-standard-linux:
-    needs: [linux-amd64, linux-multiarch]
+    needs: [linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
