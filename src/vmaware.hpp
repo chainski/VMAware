@@ -6958,22 +6958,32 @@ public:
      * @implements VM::WSL_PROC
      */
     [[nodiscard]] static bool wsl_proc_subdir() {
-        const char* osrelease = "/proc/sys/kernel/osrelease";
-        const char* version = "/proc/version";
+        auto read_proc_nonblock = [](const char* path) -> std::string {
+            const int fd = open(path, O_RDONLY | O_NONBLOCK);
+            if (fd < 0) {
+                return "";
+            }
+            char buf[512] = {};
+            const ssize_t n = read(fd, buf, sizeof(buf) - 1);
+            close(fd);
+            if (n <= 0) {
+                return "";
+            }
+            return { buf, static_cast<size_t>(n) };
+        };
+
+        const std::string osrelease = read_proc_nonblock("/proc/sys/kernel/osrelease");
+        const std::string version   = read_proc_nonblock("/proc/version");
+
+        if (osrelease.empty() || version.empty()) {
+            return false;
+        }
 
         if (
-            util::exists(osrelease) &&
-            util::exists(version)
+            (util::find(osrelease, "WSL") || util::find(osrelease, "Microsoft")) &&
+            (util::find(version,   "WSL") || util::find(version,   "Microsoft"))
         ) {
-            const std::string osrelease_content = util::read_file(osrelease);
-            const std::string version_content = util::read_file(version);
-
-            if (
-                (util::find(osrelease_content, "WSL") || util::find(osrelease_content, "Microsoft")) &&
-                (util::find(version_content, "WSL") || util::find(version_content, "Microsoft"))
-            ) {
-                return core::add(brand_enum::WSL);
-            }
+            return core::add(brand_enum::WSL);
         }
 
         return false;
@@ -13410,11 +13420,25 @@ public:
           * enabled, while the latter will toggle those bits (if there's any) after 
           * the arg_handler processing is done.
           */
-    
-    // this is public but only for advanced use cases. It's intentionally undocumented.
-    public: 
         static flagset flag_collector;
         static flagset disabled_flag_collector;
+
+        // alternative settings method
+        struct settings {
+            flagset flag_collector = generate_default();
+
+            void enable(const enum_flags flag) {
+                flag_collector.set(flag, true);
+            }
+
+            void disable(const enum_flags flag) {
+                flag_collector.set(flag, false);
+            }
+
+            bool is_set(const enum_flags flag) const {
+                return flag_collector.test(flag);
+            }
+        };
     
         static void generate_default(flagset& flags) {
             // set all bits to 1
@@ -13551,6 +13575,8 @@ public:
 
 // START OF PUBLIC FUNCTIONS
 
+    using settings = core::settings;
+
     /**
      * @brief Check for a specific technique based on flag argument
      * @param u8 (flags from VM wrapper)
@@ -13605,29 +13631,30 @@ public:
             return data.result;
         }
 
-        if (flag_bit < technique_end) {
-            const core::technique& pair = core::technique_table.at(flag_bit);
-
-            if (auto run_fn = pair.run) {
-                core::last_detected_brand = brand_enum::NULL_BRAND;
-                core::last_detected_score = 0;
-
-                const bool result = run_fn();
-
-                const u8 points_to_add = (core::last_detected_score > 0) ? core::last_detected_score : pair.points;
-
-                if (result) {
-                    detected_count_num++;
-                }
-
-                memo::cache_store(flag_bit, result, result ? points_to_add : 0, core::last_detected_brand);
-                return result;
-            }
-
-            throw_error("Flag is not known or not implemented");
+        if (flag_bit >= technique_end) {
+            return false;
         }
 
-        return false;
+        const core::technique& pair = core::technique_table.at(flag_bit);
+
+        if (auto run_fn = pair.run) {
+            core::last_detected_brand = brand_enum::NULL_BRAND;
+            core::last_detected_score = 0;
+
+            const bool result = run_fn();
+
+            const u8 points_to_add = (core::last_detected_score > 0) ? core::last_detected_score : pair.points;
+
+            if (result) {
+                detected_count_num++;
+            }
+
+            memo::cache_store(flag_bit, result, result ? points_to_add : 0, core::last_detected_brand);
+            return result;
+        }
+
+        throw_error("Flag is not known or not implemented");
+        return false; // useless but whatever
     }
 
 
@@ -13640,6 +13667,12 @@ public:
     template <typename ...Args>
     static std::string brand(Args ...args) {
         const flagset flags = core::arg_handler(args...);
+        return brand(flags);
+    }
+
+
+    static std::string brand(const settings& settings) {
+        const flagset flags = settings.flag_collector;
         return brand(flags);
     }
 
@@ -13669,6 +13702,13 @@ public:
         const flagset flags = core::arg_handler(args...);
         return detect(flags);
     }
+
+
+    static bool detect(const settings& settings) {
+        const flagset flags = settings.flag_collector;
+        return detect(flags);
+    }
+
 
     static bool detect(const flagset &flags = core::generate_default()) {
         // run all the techniques based on the 
@@ -13704,6 +13744,12 @@ public:
     static u8 percentage(Args ...args) {
         // fetch all the flags in a std::bitset
         const flagset flags = core::arg_handler(args...);
+        return percentage(flags);
+    }
+
+
+    static u8 percentage(const settings& settings) {
+        const flagset flags = settings.flag_collector;
         return percentage(flags);
     }
 
@@ -13825,7 +13871,7 @@ public:
             case HWMON: return "HWMON";
             case DLL: return "DLL";
             case HWMODEL: return "HWMODEL";
-            case WINE: return "WINE_FUNC";
+            case WINE: return "WINE";
             case POWER_CAPABILITIES: return "POWER_CAPABILITIES";
             case PROCESSES: return "PROCESSES";
             case LINUX_USER_HOST: return "LINUX_USER_HOST";
@@ -13836,7 +13882,7 @@ public:
             case IOREG_GREP: return "IOREG_GREP";
             case MAC_SIP: return "MAC_SIP";
             case VPC_INVALID: return "VPC_INVALID";
-            case SYSTEM_REGISTERS: return "TASK_SEGMENT";
+            case SYSTEM_REGISTERS: return "SYSTEM_REGISTERS";
             case VMWARE_IOMEM: return "VMWARE_IOMEM";
             case VMWARE_IOPORTS: return "VMWARE_IOPORTS";
             case VMWARE_SCSI: return "VMWARE_SCSI";
@@ -13881,9 +13927,9 @@ public:
             case DEVICES: return "DEVICES";
             case ACPI_SIGNATURE: return "ACPI_SIGNATURE";
             case TRAP: return "TRAP";
-            case UD: return "UNDEFINED_INSTRUCTION";
+            case UD: return "UD";
             case INTERRUPT_SHADOW: return "INTERRUPT_SHADOW";
-            case DBVM: return "DBVM_HYPERCALL";
+            case DBVM: return "DBVM";
             case BOOT_LOGO: return "BOOT_LOGO";
             case MAC_SYS: return "MAC_SYS";
             case KERNEL_OBJECTS: return "KERNEL_OBJECTS";
@@ -13893,8 +13939,8 @@ public:
             case CLOCK: return "CLOCK";
             case MSR: return "MSR";
             case KVM_INTERCEPTION: return "KVM_INTERCEPTION";
-            case HYPERVISOR_HOOK: return "BREAKPOINT";
-            case SINGLE_STEP: return "POPF";
+            case HYPERVISOR_HOOK: return "HYPERVISOR_HOOK";
+            case SINGLE_STEP: return "SINGLE_STEP";
             case EIP_OVERFLOW: return "EIP_OVERFLOW";
             case CGROUP: return "CGROUP";
             // END OF TECHNIQUE LIST
@@ -13921,6 +13967,13 @@ public:
     }
 
 
+    static std::vector<enum_flags> detected_enums(const settings& settings) {
+        const flagset flags = settings.flag_collector;
+        return detected_enums(flags);
+    }
+
+
+
     static std::vector<enum_flags> detected_enums(const flagset &flags = core::generate_default()) {
         std::vector<enum_flags> tmp;
 
@@ -13940,49 +13993,6 @@ public:
         return tmp;
     }
 
-    /**
-     * @brief Change the certainty score of a technique
-     * @param technique flag, then the new percentage score to overwite
-     * @return void
-     * @warning ⚠️ FOR DEVELOPMENT USAGE ONLY, NOT MEANT FOR PUBLIC USE FOR NOW ⚠️
-     */
-    static void modify_score(
-        const enum_flags flag,
-        const u8 percent
-    #if (SOURCE_LOCATION_SUPPORTED)
-        , const std::source_location& loc = std::source_location::current()
-    #endif
-    ) {
-        #if (SOURCE_LOCATION_SUPPORTED)
-            VMAWARE_UNUSED(loc);
-        #endif
-
-        auto throw_error = [&](const char* text) -> void {
-            std::stringstream ss;
-        #if (VMA_CPP >= 20 && !CLANG)
-            ss << ", error in " << loc.function_name() << " at " << loc.file_name() << ":" << loc.line() << ")";
-        #endif
-            ss << ". Consult the documentation's parameters for VM::modify_score()";
-            throw std::invalid_argument(std::string(text) + ss.str());
-        };
-
-        if (percent > 100) {
-            throw_error("Percentage parameter must be between 0 and 100");
-        }
-
-        #if (MSVC && !CLANG)
-            __assume(percent <= 100);
-        #elif (VMA_CPP >= 23)
-            [[assume(percent <= 100)]];
-        #endif
-
-        // check if the flag provided is a setting flag, which isn't valid
-        if (static_cast<u8>(flag) >= technique_end) {
-            throw_error("The flag is not a technique flag");
-        }
-
-        core::technique_table.at(flag).points = percent;
-    }
 
     /**
      * @brief Fetch the total number of detected techniques
@@ -13992,6 +14002,12 @@ public:
     template <typename ...Args>
     static u8 detected_count(Args ...args) {
         const flagset flags = core::arg_handler(args...);
+        return detected_count(flags);
+    }
+
+
+    static u8 detected_count(const settings& settings) {
+        const flagset flags = settings.flag_collector;
         return detected_count(flags);
     }
 
@@ -14012,6 +14028,12 @@ public:
     template <typename ...Args>
     static std::string type(Args ...args) {
         const flagset flags = core::arg_handler(args...);
+        return type(flags);
+    }
+
+
+    static std::string type(const settings& settings) {
+        const flagset flags = settings.flag_collector;
         return type(flags);
     }
 
@@ -14114,6 +14136,12 @@ public:
     template <typename ...Args>
     static std::string conclusion(Args ...args) {
         const flagset flags = core::arg_handler(args...);
+        return conclusion(flags);
+    }
+
+
+    static std::string conclusion(const settings& settings) {
+        const flagset flags = settings.flag_collector;
         return conclusion(flags);
     }
 
@@ -14323,12 +14351,12 @@ public:
             initialise(flags);
         }
 
-        vmaware(const flagset &flags) {
+        vmaware(const flagset& flags) {
             initialise(flags);
         }
 
         // having this design avoids some niche errors
-        void initialise(const flagset &flags) {
+        void initialise(const flagset& flags) {
             brand = VM::brand(flags);
             type = VM::type(flags);
             conclusion = VM::conclusion(flags);

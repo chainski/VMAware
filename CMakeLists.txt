@@ -83,6 +83,7 @@ if(CLANG_TIDY_EXECUTABLE)
                 -clang-tidy-binary ${CLANG_TIDY_EXECUTABLE}
                 -p ${CMAKE_BINARY_DIR}
                 -header-filter=".*/src/.*"
+                -fix
             COMMENT "Running clang-tidy"
             VERBATIM
         )
@@ -91,6 +92,7 @@ if(CLANG_TIDY_EXECUTABLE)
             COMMAND ${CLANG_TIDY_EXECUTABLE}
                 -p ${CMAKE_BINARY_DIR}
                 --header-filter=".*/src/.*"
+                --fix
                 ${CMAKE_SOURCE_DIR}/src/cli.cpp
             COMMENT "Running clang-tidy"
             VERBATIM
