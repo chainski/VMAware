@@ -22,6 +22,8 @@
  *  - License: MIT
  */ 
 
+#include <algorithm>
+#include <cctype>
 #include <vector>
 #include <chrono>
 
@@ -1298,7 +1300,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    static constexpr std::array<std::pair<const char*, arg_enum>, 33> table {{
+    static constexpr std::array<std::pair<const char*, arg_enum>, 34> table {{
         { "-h", HELP },
         { "-v", VERSION },
         { "-a", ALL },
@@ -1311,6 +1313,7 @@ int main(int argc, char* argv[]) {
         { "-n", NUMBER },
         { "-t", TYPE },
         { "-o", OUTPUT },
+        { "--output", OUTPUT },
         { "help", HELP },
         { "--help", HELP },
         { "--version", VERSION },
@@ -1369,6 +1372,9 @@ int main(int argc, char* argv[]) {
                 while (!token.empty() && token.back()  == ' ') { token.pop_back(); }
                 if (token.empty()) { continue; }
 
+                std::transform(token.begin(), token.end(), token.begin(), [](unsigned char c) {
+                    return static_cast<char>(std::toupper(c));
+                });
                 const auto fit = flag_map.find(token);
                 if (fit != flag_map.end()) {
                     settings.disable(fit->second);

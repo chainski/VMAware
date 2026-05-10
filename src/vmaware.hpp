@@ -6960,20 +6960,25 @@ public:
     [[nodiscard]] static bool wsl_proc_subdir() {
         auto read_proc_nonblock = [](const char* path) -> std::string {
             const int fd = open(path, O_RDONLY | O_NONBLOCK);
+
             if (fd < 0) {
                 return "";
             }
+
             char buf[512] = {};
             const ssize_t n = read(fd, buf, sizeof(buf) - 1);
+
             close(fd);
+
             if (n <= 0) {
                 return "";
             }
+
             return { buf, static_cast<size_t>(n) };
         };
 
         const std::string osrelease = read_proc_nonblock("/proc/sys/kernel/osrelease");
-        const std::string version   = read_proc_nonblock("/proc/version");
+        const std::string version = read_proc_nonblock("/proc/version");
 
         if (osrelease.empty() || version.empty()) {
             return false;
