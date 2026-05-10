@@ -201,38 +201,65 @@ jobs:
           chmod +x build/vmaware
           bash auxiliary/test_cli.sh build/vmaware
 
-  cpp-standard:
-    runs-on: ${{ matrix.os }}
+  cpp-standard-linux:
+    needs: [linux-amd64, linux-multiarch]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
         std: [26, 23, 20, 17, 14, 11]
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install g++-14
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends g++-14 cmake
 
-      - name: Configure (Linux, C++${{ matrix.std }})
-        if: runner.os == 'Linux'
+      - name: Configure (C++${{ matrix.std }})
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_STANDARD=${{ matrix.std }} \
             -DCMAKE_CXX_COMPILER=g++-14
 
-      - name: Configure (macOS/Windows, C++${{ matrix.std }})
-        if: runner.os != 'Linux'
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+      - name: Build (C++${{ matrix.std }})
+        run: cmake --build build --config Release
+
+  cpp-standard-macos:
+    needs: [macos]
+    runs-on: macos-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        std: [26, 23, 20, 17, 14, 11]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (C++${{ matrix.std }})
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+
+      - name: Build (C++${{ matrix.std }})
+        run: cmake --build build --config Release
+
+  cpp-standard-windows:
+    needs: [windows]
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        std: [26, 23, 20, 17, 14, 11]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (C++${{ matrix.std }})
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=${{ matrix.std }}
 
       - name: Build (C++${{ matrix.std }})
         run: cmake --build build --config Release
@@ -275,13 +302,13 @@ jobs:
         run: cmake --build build --config Release
 
   platform-builds:
-    needs: [linux-amd64, linux-multiarch, macos, windows]
+    needs: [cpp-standard-linux, cpp-standard-macos, cpp-standard-windows]
     runs-on: ubuntu-latest
     steps:
       - run: echo "All platform builds completed"
 
   completed:
-    needs: [platform-builds, cli-test, cpp-standard, compiler-compat]
+    needs: [platform-builds, cli-test, compiler-compat]
     runs-on: ubuntu-latest
     steps:
       - run: echo "All checks passed"

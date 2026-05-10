@@ -1300,7 +1300,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    static constexpr std::array<std::pair<const char*, arg_enum>, 34> table {{
+    static const std::array<std::pair<const char*, arg_enum>, 34> table {{
         { "-h", HELP },
         { "-v", VERSION },
         { "-a", ALL },
