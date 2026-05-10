@@ -7,7 +7,6 @@ on:
       - 'src/**/*.cpp'
       - 'src/**/*.hpp'
       - '.github/workflows/cross-platform-build.yml'
-      - '.github/workflows/*.bat'
       - 'CMakeLists.txt'
       - 'auxiliary/test_cli.sh'
   pull_request:
@@ -16,7 +15,6 @@ on:
       - 'src/**/*.cpp'
       - 'src/**/*.hpp'
       - '.github/workflows/cross-platform-build.yml'
-      - '.github/workflows/*.bat'
       - 'CMakeLists.txt'
       - 'auxiliary/test_cli.sh'
   workflow_dispatch:
@@ -125,24 +123,35 @@ jobs:
       matrix:
         include:
           - config: 64-debug
-            bat: build_run_win_64_debug.bat
+            arch: x64
+            debug_output: ON
             artifact: vmaware64_debug.exe
           - config: 32-debug
-            bat: build_run_win_32_debug.bat
+            arch: Win32
+            debug_output: ON
             artifact: vmaware32_debug.exe
           - config: 32-release
-            bat: build_run_win_32_release.bat
+            arch: Win32
+            debug_output: OFF
             artifact: vmaware32_release.exe
           - config: 64-release
-            bat: build_run_win_64_release.bat
+            arch: x64
+            debug_output: OFF
             artifact: vmaware64_release.exe
 
     steps:
       - uses: actions/checkout@v4
+
       - name: Disable Windows Defender real-time monitoring
         shell: pwsh
         run: Set-MpPreference -DisableRealtimeMonitoring $true
-      - run: cmd.exe /c .github\workflows\${{ matrix.bat }}
+
+      - name: Configure (${{ matrix.config }})
+        run: cmake -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -DDEBUG_OUTPUT=${{ matrix.debug_output }}
+
+      - name: Build (${{ matrix.config }})
+        run: cmake --build build --config Release
+
       - name: Rename binary with commit info
         shell: pwsh
         run: |
@@ -150,13 +159,14 @@ jobs:
           $run = "${{ github.run_number }}"
           Add-Content $env:GITHUB_ENV "SHORT_SHA=$shortSha"
           Rename-Item build\Release\vmaware.exe "vmaware_${run}_${shortSha}.exe"
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: build\Release\vmaware_${{ github.run_number }}_${{ env.SHORT_SHA }}.exe
 
   cli-test:
-    needs: [linux]
+    needs: [cpp-standard-linux]
     runs-on: ubuntu-latest
 
     steps:
@@ -237,6 +247,7 @@ jobs:
         run: cmake --build build --config Release
 
   compiler-compat:
+    needs: [cpp-standard-linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
