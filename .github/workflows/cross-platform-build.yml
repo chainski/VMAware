@@ -25,15 +25,43 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  linux:
+  linux-amd64:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Build (amd64)
+        run: |
+          docker run --rm \
+            --platform linux/amd64 \
+            -v ${{ github.workspace }}:/src \
+            -w /src \
+            debian:bookworm \
+            bash -c "
+              apt-get update -q &&
+              apt-get install -y --no-install-recommends cmake g++ build-essential &&
+              cmake -B build -DCMAKE_BUILD_TYPE=Release &&
+              cmake --build build --config Release
+            "
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vmaware-linux-amd64
+          path: build/vmaware
+          if-no-files-found: error
+          retention-days: 30
+
+  linux-multiarch:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
-            platform: linux/amd64
-            image: debian:bookworm
           - arch: arm64
             platform: linux/arm64
             image: debian:bookworm
@@ -156,7 +184,7 @@ jobs:
           path: build\Release\vmaware_${{ github.run_number }}_${{ env.SHORT_SHA }}.exe
 
   cli-test:
-    needs: [linux]
+    needs: [linux-amd64]
     runs-on: ubuntu-latest
 
     steps:
@@ -174,34 +202,42 @@ jobs:
           bash auxiliary/test_cli.sh build/vmaware
 
   cpp-standard:
-    needs: [linux, macos, windows]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         std: [26, 23, 20, 17, 14, 11]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install g++-14
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends g++-14 cmake
 
-      - name: Configure (C++${{ matrix.std }})
+      - name: Configure (Linux, C++${{ matrix.std }})
+        if: runner.os == 'Linux'
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_STANDARD=${{ matrix.std }} \
             -DCMAKE_CXX_COMPILER=g++-14
 
+      - name: Configure (macOS/Windows, C++${{ matrix.std }})
+        if: runner.os != 'Linux'
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+
       - name: Build (C++${{ matrix.std }})
         run: cmake --build build --config Release
 
   compiler-compat:
-    needs: [linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -238,8 +274,14 @@ jobs:
       - name: Build (${{ matrix.compiler }})
         run: cmake --build build --config Release
 
-  completed:
-    needs: [cli-test, cpp-standard, compiler-compat]
+  platform-builds:
+    needs: [linux-amd64, linux-multiarch, macos, windows]
     runs-on: ubuntu-latest
     steps:
-      - run: echo "All platforms built successfully"
+      - run: echo "All platform builds completed"
+
+  completed:
+    needs: [platform-builds, cli-test, cpp-standard, compiler-compat]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All checks passed"
