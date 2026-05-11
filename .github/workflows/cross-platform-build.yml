@@ -7,16 +7,16 @@ on:
       - 'src/**/*.cpp'
       - 'src/**/*.hpp'
       - '.github/workflows/cross-platform-build.yml'
-      - '.github/workflows/*.bat'
       - 'CMakeLists.txt'
+      - 'auxiliary/test_cli.sh'
   pull_request:
     branches: ["main"]
     paths:
       - 'src/**/*.cpp'
       - 'src/**/*.hpp'
       - '.github/workflows/cross-platform-build.yml'
-      - '.github/workflows/*.bat'
       - 'CMakeLists.txt'
+      - 'auxiliary/test_cli.sh'
   workflow_dispatch:
 
 env:
@@ -77,15 +77,6 @@ jobs:
               cmake --build build --config Release
             "
 
-      - name: Run binary (${{ matrix.arch }})
-        run: |
-          docker run --rm \
-            --platform ${{ matrix.platform }} \
-            -v ${{ github.workspace }}:/src \
-            -w /src \
-            ${{ matrix.image }} \
-            ./build/vmaware
-
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
@@ -116,9 +107,6 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Run binary
-        run: build/vmaware
-
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
@@ -129,29 +117,41 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
         include:
           - config: 64-debug
-            bat: build_run_win_64_debug.bat
+            arch: x64
+            debug_output: ON
             artifact: vmaware64_debug.exe
           - config: 32-debug
-            bat: build_run_win_32_debug.bat
+            arch: Win32
+            debug_output: ON
             artifact: vmaware32_debug.exe
           - config: 32-release
-            bat: build_run_win_32_release.bat
+            arch: Win32
+            debug_output: OFF
             artifact: vmaware32_release.exe
           - config: 64-release
-            bat: build_run_win_64_release.bat
+            arch: x64
+            debug_output: OFF
             artifact: vmaware64_release.exe
 
     steps:
       - uses: actions/checkout@v4
+
       - name: Disable Windows Defender real-time monitoring
         shell: pwsh
         run: Set-MpPreference -DisableRealtimeMonitoring $true
-      - run: cmd.exe /c .github\workflows\${{ matrix.bat }}
+
+      - name: Configure (${{ matrix.config }})
+        run: cmake -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }} -DDEBUG_OUTPUT=${{ matrix.debug_output }}
+
+      - name: Build (${{ matrix.config }})
+        run: cmake --build build --config Release
+
       - name: Rename binary with commit info
         shell: pwsh
         run: |
@@ -159,13 +159,139 @@ jobs:
           $run = "${{ github.run_number }}"
           Add-Content $env:GITHUB_ENV "SHORT_SHA=$shortSha"
           Rename-Item build\Release\vmaware.exe "vmaware_${run}_${shortSha}.exe"
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: build\Release\vmaware_${{ github.run_number }}_${{ env.SHORT_SHA }}.exe
 
-  all-platforms:
-    needs: [linux, macos, windows]
+  cli-test:
+    needs: [cpp-standard-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: vmaware-linux-amd64
+          path: build
+
+      - name: Run CLI test suite
+        run: |
+          chmod +x build/vmaware
+          bash auxiliary/test_cli.sh build/vmaware
+
+  cpp-standard-linux:
+    needs: [linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        std: [26, 23, 20, 17, 14, 11]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install g++-14
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends g++-14 cmake
+
+      - name: Configure (C++${{ matrix.std }})
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=${{ matrix.std }} \
+            -DCMAKE_CXX_COMPILER=g++-14
+
+      - name: Build (C++${{ matrix.std }})
+        run: cmake --build build --config Release
+
+  cpp-standard-macos:
+    needs: [macos]
+    runs-on: macos-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        std: [26, 23, 20, 17, 14, 11]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (C++${{ matrix.std }})
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+
+      - name: Build (C++${{ matrix.std }})
+        run: cmake --build build --config Release
+
+  cpp-standard-windows:
+    needs: [windows]
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        std: [23, 20, 17, 14, 11]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (C++${{ matrix.std }})
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+
+      - name: Build (C++${{ matrix.std }})
+        run: cmake --build build --config Release
+
+  compiler-compat:
+    needs: [cpp-standard-linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: g++-12
+            package: g++-12
+          - compiler: g++-13
+            package: g++-13
+          - compiler: g++-14
+            package: g++-14
+          - compiler: clang++-16
+            package: clang-16
+          - compiler: clang++-17
+            package: clang-17
+          - compiler: clang++-18
+            package: clang-18
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ${{ matrix.compiler }}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends cmake ${{ matrix.package }}
+
+      - name: Configure (${{ matrix.compiler }})
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+
+      - name: Build (${{ matrix.compiler }})
+        run: cmake --build build --config Release
+
+  platform-builds:
+    needs: [cpp-standard-linux, cpp-standard-macos, cpp-standard-windows]
     runs-on: ubuntu-latest
     steps:
-      - run: echo "All platforms built successfully"
+      - run: echo "All platform builds completed"
+
+  completed:
+    needs: [platform-builds, cli-test, compiler-compat]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All checks passed"

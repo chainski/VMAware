@@ -1,0 +1,48 @@
+name: clang-tidy
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'src/**/*.cpp'
+      - 'src/**/*.hpp'
+      - '.clang-tidy'
+      - '.github/workflows/clang-tidy.yml'
+      - 'CMakeLists.txt'
+  pull_request:
+    branches: ["main"]
+    paths:
+      - 'src/**/*.cpp'
+      - 'src/**/*.hpp'
+      - '.clang-tidy'
+      - '.github/workflows/clang-tidy.yml'
+      - 'CMakeLists.txt'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  clang-tidy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            cmake clang clang-tidy build-essential
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=clang++
+
+      - name: Build (generates compile_commands.json)
+        run: cmake --build build --config Release
+
+      - name: Run clang-tidy
+        run: cmake --build build --target clang-tidy

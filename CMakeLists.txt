@@ -69,6 +69,37 @@ add_compile_definitions(
     $<$<CONFIG:Release>:__VMAWARE_RELEASE__>
 )
 
+# export compile commands for clang-tidy
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# clang-tidy target (run separately, not during normal builds)
+find_program(CLANG_TIDY_EXECUTABLE NAMES clang-tidy clang-tidy-18 clang-tidy-17 clang-tidy-16)
+find_program(RUN_CLANG_TIDY_EXECUTABLE NAMES run-clang-tidy run-clang-tidy-18 run-clang-tidy-17 run-clang-tidy-16)
+if(CLANG_TIDY_EXECUTABLE)
+    message(STATUS "clang-tidy: ${CLANG_TIDY_EXECUTABLE}")
+    if(RUN_CLANG_TIDY_EXECUTABLE)
+        add_custom_target(clang-tidy
+            COMMAND ${RUN_CLANG_TIDY_EXECUTABLE}
+                -clang-tidy-binary ${CLANG_TIDY_EXECUTABLE}
+                -p ${CMAKE_BINARY_DIR}
+                -header-filter=".*/src/.*"
+                -fix
+            COMMENT "Running clang-tidy"
+            VERBATIM
+        )
+    else()
+        add_custom_target(clang-tidy
+            COMMAND ${CLANG_TIDY_EXECUTABLE}
+                -p ${CMAKE_BINARY_DIR}
+                --header-filter=".*/src/.*"
+                --fix
+                ${CMAKE_SOURCE_DIR}/src/cli.cpp
+            COMMENT "Running clang-tidy"
+            VERBATIM
+        )
+    endif()
+endif()
+
 # general variables
 set(TARGET "vmaware")
 
@@ -85,7 +116,7 @@ endif()
 
 # add executable
 add_executable(${TARGET} "src/cli.cpp")
-target_compile_features(${TARGET} PRIVATE cxx_std_20)
+set_property(TARGET ${TARGET} PROPERTY CXX_STANDARD ${CMAKE_CXX_STANDARD})
 
 # debug/release flags (MULTI-CONFIG SAFE)
 # Apply flags per-config using generator expressions

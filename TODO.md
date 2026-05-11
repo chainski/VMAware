@@ -15,6 +15,7 @@
 - [ ] add a --disable arg to the cli
 - [ ] find out ways to redesign the settings
 - [ ] add a clang-tidy ci/cd
+- [ ] create a ci/cd for c++11 to c++23 standards
 
 # Distant plans
 - add a python version of the library (or any other lang for that matter)

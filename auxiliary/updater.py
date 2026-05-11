@@ -100,7 +100,7 @@ def update_sections(filename):
     util = "struct util {"
     techniques = "// START OF PRIVATE VM DETECTION TECHNIQUE DEFINITIONS"
     core = "struct core {"
-    public = "public: // START OF PUBLIC FUNCTIONS"
+    public = "// START OF PUBLIC FUNCTIONS"
     external = "// ============= EXTERNAL DEFINITIONS ============="
 
     keywords = [enum, cpu, memo, util, techniques, core, public, external]

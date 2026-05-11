@@ -22,6 +22,8 @@
  *  - License: MIT
  */ 
 
+#include <algorithm>
+#include <cctype>
 #include <vector>
 #include <chrono>
 
@@ -54,7 +56,7 @@ constexpr const char* date = "April 2026";
 std::string bold = "\033[1m";
 std::string underline = "\033[4m";
 std::string ansi_exit = "\x1B[0m";
-std::string red = "\x1B[38;2;239;75;75m"; 
+std::string red = "\x1B[38;2;239;75;75m";
 std::string orange = "\x1B[38;2;255;180;5m";
 std::string green = "\x1B[38;2;94;214;114m";
 std::string red_orange = "\x1B[38;2;247;127;40m";
@@ -88,24 +90,26 @@ enum arg_enum : u8 {
     ENUMS,
     DETECTED_ONLY,
     JSON,
+    DISABLE,
     NULL_ARG
 };
 
 constexpr u8 arg_bits = static_cast<u8>(NULL_ARG) + 1;
 
 std::bitset<arg_bits> arg_bitset;
+VM::settings settings;
 
 u8 unsupported_count = 0;
 u8 supported_count = 0;
 u8 no_perms_count = 0;
 u8 disabled_count = 0;
 
-std::string detected = ("[  " + green + "DETECTED" + ansi_exit + "  ]");
-std::string not_detected = ("[" + red + "NOT DETECTED" + ansi_exit + "]");
-std::string no_support = ("[ " + grey + "NO SUPPORT" + ansi_exit + " ]");
-std::string no_perms = ("[" + grey + "  NO PERMS  " + ansi_exit + "]");
-std::string note = ("[    NOTE    ]");               
-std::string disabled = ("[" + grey + "  DISABLED  " + ansi_exit + "]");
+std::string detected = (std::string("[  ") + green + "DETECTED" + ansi_exit + "  ]");
+std::string not_detected = (std::string("[") + red + "NOT DETECTED" + ansi_exit + "]");
+std::string no_support = (std::string("[ ") + grey + "NO SUPPORT" + ansi_exit + " ]");
+std::string no_perms = (std::string("[") + grey + "  NO PERMS  " + ansi_exit + "]");
+std::string note = "[    NOTE    ]";
+std::string disabled = (std::string("[") + grey + "  DISABLED  " + ansi_exit + "]");
 
 #if (CLI_WINDOWS)
 class win_ansi_enabler_t
@@ -323,7 +327,7 @@ static std::string compute_self_sha256() {
 }
 #endif
 
-[[noreturn]] static void help(void) {
+[[noreturn]] static void help() {
     std::cout << 
 R"(Usage: 
  vmaware [option] [extra]
@@ -350,14 +354,15 @@ Extra:
  --dynamic          allow the conclusion message to be dynamic (8 possibilities instead of only 2)
  --verbose          add more information to the output
  --enums            display the technique enum name used by the lib
- --detected-only    only display the techniques that were detected 
+ --detected-only    only display the techniques that were detected
  --json             output a json-formatted file of the results
+ --disable [args]   disable specific techniques by name (e.g. --disable HYPERVISOR_BIT NVRAM QEMU_USB)
 )";
 
     std::exit(0);
 }
 
-[[noreturn]] static void version(void) {
+[[noreturn]] static void version() {
     std::cout << "vmaware " << "v" << ver << " (" << date << ")\n\n" <<
     "Derived project of VMAware library at https://github.com/kernelwernel/VMAware\n"
     "License MIT:<https://opensource.org/license/mit>.\n" << 
@@ -376,24 +381,24 @@ static const char* color(const u8 score, const bool is_hardened) {
     }
 
     if (is_hardened) {
-        return green.c_str();
+        return green.data();
     }
 
     if (arg_bitset.test(DYNAMIC)) {
-        if      (score == 0)   { return red.c_str(); }
-        else if (score <= 12)  { return red.c_str(); }
-        else if (score <= 25)  { return red_orange.c_str(); }
-        else if (score < 50)   { return red_orange.c_str(); }
-        else if (score <= 62)  { return orange.c_str(); }
-        else if (score <= 75)  { return green_orange.c_str(); }
-        else if (score < 100)  { return green.c_str(); }
-        else if (score == 100) { return green.c_str(); }
+        if (score == 0)   { return red.data(); }
+        if (score <= 12)  { return red.data(); }
+        if (score <= 25)  { return red_orange.data(); }
+        if (score < 50)   { return red_orange.data(); }
+        if (score <= 62)  { return orange.data(); }
+        if (score <= 75)  { return green_orange.data(); }
+        if (score < 100)  { return green.data(); }
+        if (score == 100) { return green.data(); }
     } else {
         if (score == 100) {
-            return green.c_str();
-        } else {
-            return red.c_str();
+            return green.data();
         }
+        
+        return red.data();
     }
 
     return "";
@@ -528,7 +533,7 @@ static bool is_disabled(const VM::enum_flags flag) {
         return false;
     }
 
-    return flag == VM::VMWARE_DMESG;
+    return !settings.is_set(flag);
 }
 
 static bool is_unsupported(VM::enum_flags flag) {
@@ -585,7 +590,7 @@ static const char* get_vm_description(const std::string& vm_brand) {
         const char* description;
     };
 
-    static const brand_entry table[] = {
+    static const std::array<brand_entry, 71> table = {{
         { VM::brands::VBOX, "Oracle VirtualBox (formerly Sun VirtualBox, Sun xVM VirtualBox and InnoTek VirtualBox) is a free and commercial hosted hypervisor for x86 and Apple ARM64 virtualization developed by Oracle Corporation initially released in 2007. It supports Intel's VT-x and AMD's AMD-V hardware-assisted virtualization, while providing an extensive feature set as a staple of its flexibility and wide use cases." },
         { VM::brands::VMWARE, "VMware is a free and commercial type 2 hypervisor initially released in 1999 and acquired by EMC, then Dell, and finally Broadcom Inc in 2023. It was the first commercially successful company to virtualize the x86 architecture, and has since produced many sub-versions of the hypervisor since its inception. It uses binary translation to re-write the code dynamically for a faster performance." },
         { VM::brands::VMWARE_EXPRESS, "VMware Express (formerly VMware GSX Server Express) was a free entry-level version of VMware's hosted hypervisor for small-scale virtualization. Released in 2003, it offered basic VM management capabilities but lacked advanced features like VMotion. Discontinued in 2006 as VMware shifted focus to enterprise solutions like ESX and vSphere." },
@@ -594,7 +599,7 @@ static const char* get_vm_description(const std::string& vm_brand) {
         { VM::brands::VMWARE_WORKSTATION, "VMware Workstation is a commercial type 2 hypervisor for Windows/Linux hosts, first released in 1999. Enables nested virtualization, 4K display support, and DirectX 11/OpenGL 4.1 acceleration. Popular with developers for testing multi-tier configurations and legacy OS compatibility through its Unity view mode." },
         { VM::brands::VMWARE_FUSION, "VMware Fusion was a macOS-hosted hypervisor (2007-2024) that allowed Intel-based Macs to run Windows/Linux VMs with Metal graphics acceleration and Retina display support. Discontinued due to Apple's transition to ARM64 architecture with Apple Silicon chips, which required significant architectural changes incompatible with x86 virtualization." },
         { VM::brands::VMWARE_HARD, "VMWare Hardener Loader is an open-source detection mitigation loader to harden vmware virtual machines against VM detection for Windows (vista~win10) x64 guests." },
-        { VM::brands::BHYVE, "bhyve (pronounced \"bee hive\", formerly written as BHyVe for \"BSD hypervisor\") is a free type 2 hosted hypervisor initially written for FreeBSD. It can also be used on a number of illumos based distributions including SmartOS, OpenIndiana, and OmniOS. bhyve has a modern codebase and uses fewer resources compared to its competitors. In the case of FreeBSD, the resource management is more efficient." },
+        { VM::brands::BHYVE, R"(bhyve (pronounced "bee hive", formerly written as BHyVe for "BSD hypervisor") is a free type 2 hosted hypervisor initially written for FreeBSD. It can also be used on a number of illumos based distributions including SmartOS, OpenIndiana, and OmniOS. bhyve has a modern codebase and uses fewer resources compared to its competitors. In the case of FreeBSD, the resource management is more efficient.)" },
         { VM::brands::KVM, "KVM is a free and open source module of the Linux kernel released in 2007. It uses hardware virtualization extensions, and has had support for hot swappable vCPUs, dynamic memory management, and Live Migration. It also reduces the impact that memory write-intensive workloads have on the migration process. KVM emulates very little hardware components, and it defers to a higher-level client application such as QEMU." },
         { VM::brands::QEMU, "The Quick Emulator (QEMU) is a free and open-source emulator that uses dynamic binary translation to emulate a computer's processor. It translates the emulated binary codes to an equivalent binary format which is executed by the machine. It provides a variety of hardware and device models for the VM, while often being combined with KVM. However, no concrete evidence of KVM was found for this system." },
         { VM::brands::QEMU_KVM, "QEMU (a free and open-source emulator that uses dynamic binary translation to emulate a computer's processor) is being used with Kernel-based Virtual Machine (KVM, a free and open source module of the Linux kernel) to virtualize hardware at near-native speeds." },
@@ -657,7 +662,7 @@ static const char* get_vm_description(const std::string& vm_brand) {
         { VM::brands::CONNECTIX, "Connectix VirtualPC was the predecessor to Microsoft's VirtualPC. Originally developed as a Macintosh application for System 7.5 and released by Connectix in June 1997, it supported various OS's such as Linux and old versions of Windows. It was bought by Microsoft in February 2003." },
         { VM::brands::CONTAINERD, "Containerd is an industry-standard container runtime used as the core engine beneath Docker, Kubernetes, and other container platforms. It manages the complete container lifecycle including image transfer, storage, execution, and supervision." },
         { VM::brands::NULL_BRAND, "Indicates no detectable virtualization brand. This result may occur on bare-metal systems, unsupported/obscure hypervisors, or when anti-detection techniques (e.g., VM escaping) are employed by the guest environment." }
-    };
+    }};
 
     // Range-based for loop (C++11)
     // std::string operator== checks size first, so this is highly optimized.
@@ -786,15 +791,17 @@ static const char* get_vm_description(const std::string& vm_brand) {
 }
 
 static void checker(const VM::enum_flags flag, const char* message) {
-    std::string enum_name = "";
+    std::string enum_name;
 
     if (arg_bitset.test(ENUMS)) {
         enum_name = grey + " [VM::" + VM::flag_to_string(flag) + "]" + ansi_exit;
     }
 
     if (is_disabled(flag)) {
-        if (!arg_bitset.test(DETECTED_ONLY))
+        if (!arg_bitset.test(DETECTED_ONLY)) {
             std::cout << disabled << " Skipped " << message << enum_name << "\n";
+        }
+
         disabled_count++;
         return;
     }
@@ -868,21 +875,17 @@ const bool is_anyrun_driver = anyrun_driver();
 const bool is_anyrun = (is_anyrun_directory || is_anyrun_driver);
 
 
-static void general(
-    const VM::enum_flags high_threshold, 
-    const VM::enum_flags all,
-    const VM::enum_flags dynamic
-) {
+static void general() {
     bool notes_enabled = false;
    
     if (arg_bitset.test(NO_ANSI)) {
-        detected = ("[  DETECTED  ]");
-        not_detected = ("[NOT DETECTED]");
-        no_support = ("[ NO SUPPORT ]");
-        no_perms = ("[  NO PERMS  ]");
-        note = ("[    NOTE    ]");               
-        disabled = ("[  DISABLED  ]");
-        
+        detected = "[  DETECTED  ]";
+        not_detected = "[NOT DETECTED]";
+        no_support = "[ NO SUPPORT ]";
+        no_perms = "[  NO PERMS  ]";
+        note = "[    NOTE    ]";
+        disabled = "[  DISABLED  ]";
+
         bold = "";
         underline = "";
         ansi_exit = "";
@@ -1011,7 +1014,7 @@ static void general(
     std::printf("\n");
 
     // struct containing the whole overview of the VM data
-    VM::vmaware vm(VM::MULTIPLE, high_threshold, all, dynamic);
+    const VM::vmaware vm(settings.flag_collector);
 
     // brand manager
     {
@@ -1031,58 +1034,54 @@ static void general(
 
 
     // type manager
-    {
-        if (is_vm_brand_multiple(vm.brand) == false) {
-            std::string current_color = "";
-            std::string type = vm.type;
+    if (is_vm_brand_multiple(vm.brand) == false) {
+        std::string current_color;
+        std::string type = vm.type;
 
-            if (is_anyrun && (type == "Unknown")) {
-                type = "Sandbox";
-            }
-
-            if (type == "Unknown" || type == "Host machine") {
-                current_color = red;
-            } else {
-                current_color = green;
-            }
-
-            std::cout << bold << "VM type: " << ansi_exit << current_color << type << ansi_exit << "\n";
+        if (is_anyrun && (type == "Unknown")) {
+            type = "Sandbox";
         }
+
+        if (type == "Unknown" || type == "Host machine") {
+            current_color = red;
+        } else {
+            current_color = green;
+        }
+
+        std::cout << bold << "VM type: " << ansi_exit << current_color << type << ansi_exit << "\n";
     }
 
 
     // percentage manager
     {
-        const char* percent_color;
+        const char* percent_color = nullptr;
 
-        if (vm.percentage == 0) { percent_color = red.c_str(); }
-        else if (vm.percentage < 25) { percent_color = red_orange.c_str(); }
-        else if (vm.percentage < 50) { percent_color = orange.c_str(); }
-        else if (vm.percentage < 75) { percent_color = green_orange.c_str(); }
-        else { percent_color = green.c_str(); }
+        if (vm.percentage == 0) { percent_color = red.data(); }
+        else if (vm.percentage < 25) { percent_color = red_orange.data(); }
+        else if (vm.percentage < 50) { percent_color = orange.data(); }
+        else if (vm.percentage < 75) { percent_color = green_orange.data(); }
+        else { percent_color = green.data(); }
 
         std::cout << bold << "VM likeliness: " << ansi_exit << percent_color << static_cast<u32>(vm.percentage) << "%" << ansi_exit << "\n";
     }
 
 
     // VM confirmation manager
-    {
-        std::cout << bold << "VM confirmation: " << ansi_exit << (vm.is_vm ? green : red) << std::boolalpha << vm.is_vm << std::noboolalpha << ansi_exit << "\n";
-    }
+    std::cout << bold << "VM confirmation: " << ansi_exit << (vm.is_vm ? green : red) << std::boolalpha << vm.is_vm << std::noboolalpha << ansi_exit << "\n";
 
 
     // detection count manager
     {
-        const char* count_color;
+        const char* count_color = nullptr;
 
         switch (vm.detected_count) {
-        case 0: count_color = red.c_str(); break;
-        case 1: count_color = red_orange.c_str(); break;
-        case 2: count_color = orange.c_str(); break;
-        case 3: count_color = orange.c_str(); break;
-        case 4: count_color = green_orange.c_str(); break;
+        case 0: count_color = red.data(); break;
+        case 1: count_color = red_orange.data(); break;
+        case 2: count_color = orange.data(); break;
+        case 3: count_color = orange.data(); break;
+        case 4: count_color = green_orange.data(); break;
         default:
-            count_color = green.c_str();
+            count_color = green.data();
         }
 
         std::cout <<
@@ -1099,31 +1098,27 @@ static void general(
 
 
     // hardened environment detection manager 
-    {
-        std::cout << bold << "VM hardening: " << ansi_exit;
+    std::cout << bold << "VM hardening: " << ansi_exit;
 
-        if (vm.is_hardened) {
-            std::cout << green << "likely" << ansi_exit << "\n";
-        } else {
-            std::cout << grey << "unlikely" << ansi_exit << "\n";
-        }
+    if (vm.is_hardened) {
+        std::cout << green << "likely" << ansi_exit << "\n";
+    } else {
+        std::cout << grey << "unlikely" << ansi_exit << "\n";
     }
 
 
     // misc manager
-    {
-        if (arg_bitset.test(VERBOSE)) {
-            std::cout << bold << "\nUnsupported detections: " << ansi_exit << static_cast<u32>(unsupported_count) << "\n";
-            std::cout << bold << "Supported detections: " << ansi_exit << static_cast<u32>(supported_count) << "\n";
-            std::cout << bold << "No permission detections: " << ansi_exit << static_cast<u32>(no_perms_count) << "\n";
-            std::cout << bold << "Disabled detections: " << ansi_exit << static_cast<u32>(disabled_count) << "\n";
+    if (arg_bitset.test(VERBOSE)) {
+        std::cout << bold << "\nUnsupported detections: " << ansi_exit << static_cast<u32>(unsupported_count) << "\n";
+        std::cout << bold << "Supported detections: " << ansi_exit << static_cast<u32>(supported_count) << "\n";
+        std::cout << bold << "No permission detections: " << ansi_exit << static_cast<u32>(no_perms_count) << "\n";
+        std::cout << bold << "Disabled detections: " << ansi_exit << static_cast<u32>(disabled_count) << "\n";
 
-            const std::chrono::duration<double, std::milli> elapsed = t2 - t1;
-            std::cout << bold << "Execution speed: " << ansi_exit << elapsed.count() << "ms\n";
-        }
-
-        std::printf("\n");
+        const std::chrono::duration<double, std::milli> elapsed = t2 - t1;
+        std::cout << bold << "Execution speed: " << ansi_exit << elapsed.count() << "ms\n";
     }
+
+    std::printf("\n");
 
 
     // sha256 output (debug)
@@ -1138,52 +1133,50 @@ static void general(
 
 
     // description manager
-    {
-        if (vm.brand != VM::brands::NULL_BRAND) {
-            const std::string description = get_vm_description(vm.brand);
+    if (vm.brand != VM::brands::NULL_BRAND) {
+        const std::string description = get_vm_description(vm.brand);
 
-            if (!description.empty()) {
-                std::cout << bold << underline << "VM description:" << ansi_exit << "\n";
+        if (!description.empty()) {
+            std::cout << bold << underline << "VM description:" << ansi_exit << "\n";
 
-                // this basically adds a \n for every 50 characters after a space
-                // so that the output doesn't wrap around the console while making
-                // it harder to read. Kinda like how this comment you're reading is
-                // structured by breaking the lines in a clean and organised way. 
-                const u8 max_line_length = 60;
-                
-                std::vector<std::string> divided_description;
+            // this basically adds a \n for every 50 characters after a space
+            // so that the output doesn't wrap around the console while making
+            // it harder to read. Kinda like how this comment you're reading is
+            // structured by breaking the lines in a clean and organised way. 
+            const u8 max_line_length = 60;
+            
+            std::vector<std::string> divided_description;
 
-                std::istringstream stream(description);
-                std::string word_snippet;
+            std::istringstream stream(description);
+            std::string word_snippet;
 
-                // extract words separated by spaces
-                while (stream >> word_snippet) {
-                    divided_description.push_back(word_snippet);
-                }
-
-                std::size_t char_count = 0;
-
-                for (auto it = divided_description.begin(); it != divided_description.end(); ++it) {
-                    char_count += it->length() + 1; // +1 because of the space
-
-                    if (char_count <= 60) {
-                        continue;
-                    } else {
-                        if ((static_cast<unsigned long long>(char_count) - 1) >= (static_cast<unsigned long long>(max_line_length) + 3)) {
-                            it = divided_description.insert(it + 1, "\n");
-                            char_count = it->length() + 1;
-                        } else {
-                            continue;
-                        }
-                    }
-                }
-
-                for (const auto& str : divided_description) {
-                    std::cout << str << ((str != "\n") ? " " : "");
-                }
-
-                std::printf("\n\n");
+            // extract words separated by spaces
+            while (stream >> word_snippet) {
+                divided_description.push_back(word_snippet);
             }
+
+            std::size_t char_count = 0;
+
+            for (auto it = divided_description.begin(); it != divided_description.end(); ++it) {
+                char_count += it->length() + 1; // +1 because of the space
+
+                if (char_count <= 60) {
+                    continue;
+                }
+
+                if ((static_cast<u64>(char_count) - 1) < (static_cast<u64>(max_line_length) + 3)) {
+                    continue;
+                }
+                
+                it = divided_description.insert(it + 1, "\n");
+                char_count = it->length() + 1;
+            }
+
+            for (const auto& str : divided_description) {
+                std::cout << str << ((str != "\n") ? " " : "");
+            }
+
+            std::printf("\n\n");
         }
     }
 
@@ -1233,47 +1226,46 @@ static void general(
 static void generate_json(const char* output) {
     std::vector<std::string> json;
 
-    json.push_back("{");
-    json.push_back("\n\t\"is_detected\": ");
-    json.push_back(VM::detect() ? "true," : "false,");
-    json.push_back("\n\t\"brand\": \"");
-    json.push_back(VM::brand());
-    json.push_back("\",");
-    json.push_back("\n\t\"conclusion\": \"");
-    json.push_back(VM::conclusion());
-    json.push_back("\",");
-    json.push_back("\n\t\"percentage\": ");
-    json.push_back(std::to_string(static_cast<int>(VM::percentage())));
-    json.push_back(",");
-    json.push_back("\n\t\"detected_technique_count\": ");
-    json.push_back(std::to_string(VM::technique_count));
-    json.push_back(",");
-    json.push_back("\n\t\"vm_type\": \"");
-    json.push_back(VM::type());
-    json.push_back("\",");
-    json.push_back("\n\t\"is_hardened\": ");
-    json.push_back(VM::is_hardened() ? "true," : "false,");
-    json.push_back("\n\t\"detected_techniques\": [");
+    json.emplace_back("{");
+    json.emplace_back("\n\t\"is_detected\": ");
+    json.emplace_back(VM::detect(settings) ? "true," : "false,");
+    json.emplace_back("\n\t\"brand\": \"");
+    json.emplace_back(VM::brand(settings));
+    json.emplace_back("\",");
+    json.emplace_back("\n\t\"conclusion\": \"");
+    json.emplace_back(VM::conclusion(settings));
+    json.emplace_back("\",");
+    json.emplace_back("\n\t\"percentage\": ");
+    json.emplace_back(std::to_string(static_cast<int>(VM::percentage(settings))));
+    json.emplace_back(",");
+    json.emplace_back("\n\t\"detected_technique_count\": ");
+    json.emplace_back(std::to_string(VM::technique_count));
+    json.emplace_back(",");
+    json.emplace_back("\n\t\"vm_type\": \"");
+    json.emplace_back(VM::type(settings));
+    json.emplace_back("\",");
+    json.emplace_back("\n\t\"is_hardened\": ");
+    json.emplace_back(VM::is_hardened() ? "true," : "false,");
+    json.emplace_back("\n\t\"detected_techniques\": [");
 
-    const auto detected_status = VM::detected_enums();
+    const auto detected_status = VM::detected_enums(settings);
 
-    if (detected_status.size() == 0) {
-        json.push_back("]\n}");
-    }
-    else {
+    if (detected_status.empty()) {
+        json.emplace_back("]\n}");
+    } else {
         for (size_t i = 0; i < detected_status.size(); i++) {
-            json.push_back("\n\t\t\"");
-            json.push_back(VM::flag_to_string(detected_status[i]));
+            json.emplace_back("\n\t\t\"");
+            json.emplace_back(VM::flag_to_string(detected_status.at(i)));
 
             if (i == detected_status.size() - 1) {
-                json.push_back("\"");
+                json.emplace_back("\"");
             }
             else {
-                json.push_back("\",");
+                json.emplace_back("\",");
             }
         }
 
-        json.push_back("\n\t]\n}");
+        json.emplace_back("\n\t]\n}");
     }
 
     std::ofstream file(output);
@@ -1304,11 +1296,11 @@ int main(int argc, char* argv[]) {
     VM::add_custom(35, anyrun_directory);
 
     if (arg_count == 0) {
-        general(VM::NULL_ARG, VM::NULL_ARG, VM::NULL_ARG);
+        general();
         return 0;
     }
 
-    static constexpr std::array<std::pair<const char*, arg_enum>, 32> table {{
+    static const std::array<std::pair<const char*, arg_enum>, 34> table {{
         { "-h", HELP },
         { "-v", VERSION },
         { "-a", ALL },
@@ -1321,6 +1313,7 @@ int main(int argc, char* argv[]) {
         { "-n", NUMBER },
         { "-t", TYPE },
         { "-o", OUTPUT },
+        { "--output", OUTPUT },
         { "help", HELP },
         { "--help", HELP },
         { "--version", VERSION },
@@ -1340,14 +1333,60 @@ int main(int argc, char* argv[]) {
         { "--enums", ENUMS },
         { "--no-ansi", NO_ANSI },
         { "--detected-only", DETECTED_ONLY },
-        { "--json", JSON }
+        { "--json", JSON },
+        { "--disable", DISABLE }
     }};
 
-    std::string potential_null_arg = "";
+    // Build string → VM::enum_flags lookup for --disable argument parsing.
+    // Uses flag_to_string() names plus raw enum-name aliases for techniques
+    // whose display name differs (e.g. WINE → "WINE_FUNC").
+
+    using flag_map_t = std::unordered_map<std::string, VM::enum_flags>;
+
+    const auto build_flag_map = []() {
+        flag_map_t m;
+
+        for (u8 i = 0; i < static_cast<u8>(VM::DEFAULT); ++i) {
+            const auto flag = static_cast<VM::enum_flags>(i);
+            m[VM::flag_to_string(flag)] = flag;
+        }
+
+        return m;
+    };
+
+    const flag_map_t flag_map = build_flag_map();
+
+    std::string potential_null_arg;
     const char* potential_output_arg = "results.json";
+    bool collecting_disable_args = false;
 
     for (i32 i = 1; i < argc; ++i) {
         const char* arg_string = argv[i];
+
+        if (collecting_disable_args && arg_string[0] != '-') {
+            // tokens after --disable are technique names; commas are allowed as separators
+            std::istringstream ss(arg_string);
+            std::string token;
+            while (std::getline(ss, token, ',')) {
+                while (!token.empty() && token.front() == ' ') { token.erase(0, 1); }
+                while (!token.empty() && token.back()  == ' ') { token.pop_back(); }
+                if (token.empty()) { continue; }
+
+                std::transform(token.begin(), token.end(), token.begin(), [](unsigned char c) {
+                    return static_cast<char>(std::toupper(c));
+                });
+                const auto fit = flag_map.find(token);
+                if (fit != flag_map.end()) {
+                    settings.disable(fit->second);
+                } else {
+                    std::cerr << "Unknown technique \"" << token << "\" for --disable, aborting\n";
+                    return 1;
+                }
+            }
+            continue;
+        }
+
+        collecting_disable_args = false;
 
         auto it = std::find_if(table.cbegin(), table.cend(), [&](const std::pair<const char*, i32>& p) {
             return (std::strcmp(p.first, arg_string) == 0);
@@ -1355,10 +1394,12 @@ int main(int argc, char* argv[]) {
 
         if (it == table.end()) {
             if (arg_bitset.test(OUTPUT)) {
-                std::ofstream file(arg_string);
+                const std::ofstream file(arg_string);
+
                 if (file.good()) {
                     potential_output_arg = arg_string;
                 }
+
                 arg_bitset.set(OUTPUT, false);
             } else {
                 arg_bitset.set(NULL_ARG);
@@ -1366,9 +1407,28 @@ int main(int argc, char* argv[]) {
             }
         } else {
             arg_bitset.set(it->second);
+            if (it->second == DISABLE) {
+                collecting_disable_args = true;
+            }
         }
     }
 
+    // Apply flag args into settings so all API calls can use a single settings object.
+    // MULTIPLE is always enabled here — it only affects brand string rendering, not
+    // detect/percentage results, so it's safe to have it on unconditionally.
+    if (arg_bitset.test(HIGH_THRESHOLD)) {
+        settings.enable(VM::HIGH_THRESHOLD);
+    }
+    if (arg_bitset.test(DYNAMIC)) {
+        settings.enable(VM::DYNAMIC);
+    }
+    if (arg_bitset.test(ALL)) {
+        settings.enable(VM::ALL);
+        for (const VM::enum_flags f : VM::disabled_techniques) {
+            settings.enable(f);
+        }
+    }
+    settings.enable(VM::MULTIPLE);
 
     // no critical returners
     if (arg_bitset.test(NULL_ARG)) {
@@ -1378,7 +1438,7 @@ int main(int argc, char* argv[]) {
 
     if (arg_bitset.test(HELP)) {
         help();
-    } 
+    }
 
     if (arg_bitset.test(VERSION)) {
         version();
@@ -1408,10 +1468,6 @@ int main(int argc, char* argv[]) {
         static_cast<u32>(arg_bitset.test(CONCLUSION))
     );
 
-    const VM::enum_flags high_threshold = (arg_bitset.test(HIGH_THRESHOLD) ? VM::HIGH_THRESHOLD : VM::NULL_ARG);
-    const VM::enum_flags all = (arg_bitset.test(ALL) ? VM::ALL : VM::NULL_ARG);
-    const VM::enum_flags dynamic = (arg_bitset.test(DYNAMIC) ? VM::DYNAMIC : VM::NULL_ARG);
-
     if (returners > 0) { // at least one of the options are set
         if (returners > 1) { // more than 2 options are set
             std::cerr << "--stdout, --percent, --detect, --brand, --type, and --conclusion must NOT be a combination, choose only a single one\n";
@@ -1419,45 +1475,43 @@ int main(int argc, char* argv[]) {
         }
 
         if (arg_bitset.test(STDOUT)) {
-            return (!VM::detect(high_threshold, all, dynamic));
+            return (!VM::detect(settings));
         }
 
         if (arg_bitset.test(PERCENT)) {
-            std::cout << static_cast<u32>(VM::percentage(high_threshold, all, dynamic)) << "\n";
+            std::cout << static_cast<u32>(VM::percentage(settings)) << "\n";
             return 0;
         }
 
         if (arg_bitset.test(DETECT)) {
-            std::cout << VM::detect(high_threshold, all, dynamic) << "\n";
+            std::cout << VM::detect(settings) << "\n";
             return 0;
         }
 
         if (arg_bitset.test(BRAND)) {
-            std::string brand = VM::brand(VM::MULTIPLE, high_threshold, all, dynamic);
-            
+            std::string brand = VM::brand(settings);
+
             if (is_anyrun && (brand == VM::brands::NULL_BRAND)) {
                 brand = "ANY.RUN";
             }
 
             std::cout << brand << "\n";
-
             return 0;
         }
 
         if (arg_bitset.test(TYPE)) {
-            std::string type = VM::type(VM::MULTIPLE, high_threshold, all, dynamic);
+            std::string type = VM::type(settings);
 
             if (is_anyrun && (type == VM::brands::NULL_BRAND)) {
                 type = "Sandbox";
             }
 
             std::cout << type << "\n";
-
             return 0;
         }
 
         if (arg_bitset.test(CONCLUSION)) {
-            std::string conclusion = VM::conclusion(VM::MULTIPLE, high_threshold, all, dynamic);
+            std::string conclusion = VM::conclusion(settings);
 
             if (is_anyrun) {
                 const std::string original = VM::brands::NULL_BRAND;
@@ -1472,6 +1526,6 @@ int main(int argc, char* argv[]) {
     }
 
     // at this point, it's assumed that the user's intention is for the general summary to be ran
-    general(high_threshold, all, dynamic);
+    general();
     return 0;
 }
