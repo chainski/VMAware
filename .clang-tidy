@@ -53,6 +53,7 @@ Checks: >
     -cppcoreguidelines-avoid-c-arrays,
     -cppcoreguidelines-pro-type-reinterpret-cast,
     -cppcoreguidelines-special-member-functions,
+    -cppcoreguidelines-pro-bounds-constant-array-index,
     misc-*,
     -misc-unused-alias-decls,
     -misc-include-cleaner,

@@ -13966,7 +13966,6 @@ public:
     }
 
 
-
     static std::vector<enum_flags> detected_enums(const flagset &flags = core::generate_default()) {
         std::vector<enum_flags> tmp;
 

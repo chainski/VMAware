@@ -22,6 +22,7 @@
  *  - License: MIT
  */
 
+#include <cstddef>
 #include <vector>
 #include <chrono>
 #include <iomanip>
@@ -112,8 +113,6 @@ struct SHA256 {
     u32 s[8] = {};
 
     SHA256() {
-        len = 0;
-        bits = 0;
         s[0] = 0x6a09e667;
         s[1] = 0xbb67ae85;
         s[2] = 0x3c6ef372;
@@ -236,7 +235,7 @@ struct SHA256 {
         transform();
         for (i = 0; i < 4; ++i) {
             for (size_t j = 0; j < 8; ++j) {
-                out[i + j * 4] = (u8)((s[j] >> (24 - i * 8)) & 0xFF);
+                out[i + (j * 4)] = (u8)((s[j] >> (24 - (i * 8))) & 0xFF);
             }
         }
     }
@@ -246,28 +245,44 @@ static std::string exe_path() {
 #if (CLI_WINDOWS)
     std::vector<char> buf(32768);
     DWORD r = GetModuleFileNameA(NULL, buf.data(), (DWORD)buf.size());
-    if (r == 0 || r >= buf.size()) return {};
+
+    if (r == 0 || r >= buf.size()) {
+        return {};
+    }
+
     return std::string(buf.data(), r);
 #elif (CLI_APPLE)
     uint32_t sz = 0;
     _NSGetExecutablePath(nullptr, &sz);
     std::vector<char> b(sz);
-    if (_NSGetExecutablePath(b.data(), &sz) != 0) return {};
+
+    if (_NSGetExecutablePath(b.data(), &sz) != 0) {
+        return {};
+    }
+
     std::vector<char> resolved(PATH_MAX);
+
     if (realpath(b.data(), resolved.data())) {
         return std::string(resolved.data());
     }
+
     return std::string(b.data());
 #else
     std::vector<char> b(PATH_MAX);
     ssize_t l = ::readlink("/proc/self/exe", b.data(), b.size() - 1);
-    if (l <= 0) return {};
+
+    if (l <= 0) {
+        return {};
+    }
+
     b[(size_t)l] = '\0';
     std::vector<char> resolved(PATH_MAX);
+
     if (realpath(b.data(), resolved.data())) {
-        return std::string(resolved.data());
+        return resolved.data();
     }
-    return std::string(b.data());
+
+    return b.data();
 #endif
 }
 
@@ -284,7 +299,7 @@ static std::string compute_self_sha256() {
 
     SHA256 sha;
 
-    std::vector<char> chunk(64 * 1024);
+    std::vector<char> chunk(static_cast<size_t>(64 * 1024));
     while (ifs) {
         ifs.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
         std::streamsize r = ifs.gcount();
@@ -300,10 +315,12 @@ static std::string compute_self_sha256() {
     out.reserve(64);
 
     static constexpr char hex[] = "0123456789abcdef";
-    for (int i = 0; i < 32; ++i) {
-        out.push_back(hex[(digest[i] >> 4) & 0xF]);
-        out.push_back(hex[digest[i] & 0xF]);
+
+    for (unsigned char i : digest) {
+        out.push_back(hex[(i >> 4) & 0xF]);
+        out.push_back(hex[i & 0xF]);
     }
+
     return out;
 }
 
@@ -1022,7 +1039,7 @@ LONG WINAPI VehLogger(PEXCEPTION_POINTERS ep) {
 }
 
 #else
-#define PRINT_LINE(msg) std::cout << msg << "\n"
+#define PRINT_LINE(msg) std::cout << (msg) << "\n"
 
 template<typename... Args>
 void VMAWARE_CLI_DEBUG(Args&&... args) {
@@ -1034,7 +1051,7 @@ void VMAWARE_CLI_DEBUG(Args&&... args) {
 #endif
 
 
-[[noreturn]] static void help(void) {
+[[noreturn]] static void help() {
     std::cout <<
         R"(Usage: 
          vmaware [option] [extra]
@@ -1068,7 +1085,7 @@ void VMAWARE_CLI_DEBUG(Args&&... args) {
     std::exit(0);
 }
 
-[[noreturn]] static void version(void) {
+[[noreturn]] static void version() {
     std::cout << "vmaware " << "v" << ver << " (" << date << ")\n\n" <<
         "Derived project of VMAware library at https://github.com/kernelwernel/VMAware\n"
         "License MIT:<https://opensource.org/license/mit>.\n" <<
@@ -1092,25 +1109,32 @@ static const char* color(const u8 score, const bool is_hardened) {
         if (score == 0) {
             return red.c_str();
         }
-        else if (score <= 12) {
+        
+        if (score <= 12) {
             return red.c_str();
         }
-        else if (score <= 25) {
+        
+        if (score <= 25) {
             return red_orange.c_str();
         }
-        else if (score < 50) {
+        
+        if (score < 50) {
             return red_orange.c_str();
         }
-        else if (score <= 62) {
+        
+        if (score <= 62) {
             return orange.c_str();
         }
-        else if (score <= 75) {
+        
+        if (score <= 75) {
             return green_orange.c_str();
         }
-        else if (score < 100) {
+        
+        if (score < 100) {
             return green.c_str();
         }
-        else if (score == 100) {
+        
+        if (score == 100) {
             return green.c_str();
         }
     }
@@ -1118,9 +1142,8 @@ static const char* color(const u8 score, const bool is_hardened) {
         if (score == 100) {
             return green.c_str();
         }
-        else {
-            return red.c_str();
-        }
+
+        return red.c_str();
     }
     return "";
 }
@@ -1285,7 +1308,7 @@ static const char* get_vm_description(const std::string& vm_brand) {
         { VM::brands::VMWARE_WORKSTATION, "VMware Workstation is a commercial type 2 hypervisor for Windows/Linux hosts, first released in 1999. Enables nested virtualization, 4K display support, and DirectX 11/OpenGL 4.1 acceleration. Popular with developers for testing multi-tier configurations and legacy OS compatibility through its Unity view mode." },
         { VM::brands::VMWARE_FUSION, "VMware Fusion was a macOS-hosted hypervisor (2007-2024) that allowed Intel-based Macs to run Windows/Linux VMs with Metal graphics acceleration and Retina display support. Discontinued due to Apple's transition to ARM64 architecture with Apple Silicon chips, which required significant architectural changes incompatible with x86 virtualization." },
         { VM::brands::VMWARE_HARD, "VMWare Hardener Loader is an open-source detection mitigation loader to harden vmware virtual machines against VM detection for Windows (vista~win10) x64 guests." },
-        { VM::brands::BHYVE, "bhyve (pronounced \"bee hive\", formerly written as BHyVe for \"BSD hypervisor\") is a free type 2 hosted hypervisor initially written for FreeBSD. It can also be used on a number of illumos based distributions including SmartOS, OpenIndiana, and OmniOS. bhyve has a modern codebase and uses fewer resources compared to its competitors. In the case of FreeBSD, the resource management is more efficient." },
+        { VM::brands::BHYVE, R"(bhyve (pronounced "bee hive", formerly written as BHyVe for "BSD hypervisor") is a free type 2 hosted hypervisor initially written for FreeBSD. It can also be used on a number of illumos based distributions including SmartOS, OpenIndiana, and OmniOS. bhyve has a modern codebase and uses fewer resources compared to its competitors. In the case of FreeBSD, the resource management is more efficient.)" },
         { VM::brands::KVM, "KVM is a free and open source module of the Linux kernel released in 2007. It uses hardware virtualization extensions, and has had support for hot swappable vCPUs, dynamic memory management, and Live Migration. It also reduces the impact that memory write-intensive workloads have on the migration process. KVM emulates very little hardware components, and it defers to a higher-level client application such as QEMU." },
         { VM::brands::QEMU, "The Quick Emulator (QEMU) is a free and open-source emulator that uses dynamic binary translation to emulate a computer's processor. It translates the emulated binary codes to an equivalent binary format which is executed by the machine. It provides a variety of hardware and device models for the VM, while often being combined with KVM. However, no concrete evidence of KVM was found for this system." },
         { VM::brands::QEMU_KVM, "QEMU (a free and open-source emulator that uses dynamic binary translation to emulate a computer's processor) is being used with Kernel-based Virtual Machine (KVM, a free and open source module of the Linux kernel) to virtualize hardware at near-native speeds." },
@@ -1359,7 +1382,7 @@ static const char* get_vm_description(const std::string& vm_brand) {
 }
 
 static void checker(const VM::enum_flags flag, const char* message) {
-    std::string enum_name = "";
+    std::string enum_name;
 
     if (arg_bitset.test(ENUMS)) {
         enum_name = grey + " [VM::" + VM::flag_to_string(flag) + "]" + ansi_exit;
@@ -1374,9 +1397,8 @@ static void checker(const VM::enum_flags flag, const char* message) {
         unsupported_count++;
         return;
     }
-    else {
-        supported_count++;
-    }
+
+    supported_count++;
 
     auto start_time = std::chrono::high_resolution_clock::now();
     const bool result = VM::check(flag);
@@ -1553,20 +1575,17 @@ static void general(
         summary.push_back(bold + "VM type: " + ansi_exit + current_color + vm.type + ansi_exit);
     }
 
-    const char* percent_color;
+    const char* percent_color = nullptr;
+
     if (vm.percentage == 0) {
         percent_color = red.c_str();
-    }
-    else if (vm.percentage < 25) {
+    } else if (vm.percentage < 25) {
         percent_color = red_orange.c_str();
-    }
-    else if (vm.percentage < 50) {
+    } else if (vm.percentage < 50) {
         percent_color = orange.c_str();
-    }
-    else if (vm.percentage < 75) {
+    } else if (vm.percentage < 75) {
         percent_color = green_orange.c_str();
-    }
-    else {
+    } else {
         percent_color = green.c_str();
     }
 
@@ -1574,7 +1593,8 @@ static void general(
 
     summary.push_back(bold + "VM confirmation: " + ansi_exit + (vm.is_vm ? green : red) + (vm.is_vm ? "true" : "false") + ansi_exit);
 
-    const char* count_color;
+    const char* count_color = nullptr;
+
     switch (vm.detected_count) {
         case 0: count_color = red.c_str(); break;
         case 1: count_color = red_orange.c_str(); break;
@@ -1586,7 +1606,7 @@ static void general(
 
     summary.push_back(bold + "VM detections: " + ansi_exit + count_color + std::to_string(static_cast<u32>(vm.detected_count)) + "/" + std::to_string(static_cast<u32>(vm.technique_count)) + ansi_exit);
     summary.push_back(bold + "VM hardening: " + ansi_exit + (vm.is_hardened ? (green + "likely") : (grey + "unlikely")) + ansi_exit);
-    summary.push_back("");
+    summary.emplace_back("");
 
     if (arg_bitset.test(VERBOSE)) {
         summary.push_back(bold + "Unsupported detections: " + ansi_exit + std::to_string(static_cast<u32>(unsupported_count)));
@@ -1596,7 +1616,7 @@ static void general(
 
         const std::chrono::duration<double, std::milli> elapsed = t2 - t1;
         summary.push_back(bold + "Execution speed: " + ansi_exit + std::to_string(elapsed.count()) + "ms");
-        summary.push_back("");
+        summary.emplace_back("");
     }
 
     if (vm.brand != VM::brands::NULL_BRAND) {
@@ -1617,16 +1637,16 @@ static void general(
                 if (char_count <= 60) {
                     continue;
                 }
+
+                if ((static_cast<unsigned long long>(char_count) - 1) >= (static_cast<unsigned long long>(60) + 3)) {
+                    it = divided_description.insert(it + 1, "\n");
+                    char_count = it->length() + 1;
+                }
                 else {
-                    if ((static_cast<unsigned long long>(char_count) - 1) >= (static_cast<unsigned long long>(60) + 3)) {
-                        it = divided_description.insert(it + 1, "\n");
-                        char_count = it->length() + 1;
-                    }
-                    else {
-                        continue;
-                    }
+                    continue;
                 }
             }
+
             std::ostringstream desc_oss;
             for (const auto& str : divided_description) {
                 desc_oss << str << ((str != "\n") ? " " : "");
@@ -1637,7 +1657,7 @@ static void general(
             while (std::getline(format_stream, current_line)) {
                 summary.push_back(current_line);
             }
-            summary.push_back("");
+            summary.emplace_back("");
         }
     }
 
@@ -1669,20 +1689,15 @@ static void general(
             ch = _getch();
             if (ch == 72) {
                 g_tui.scrollCyclesUp();
-            }
-            else if (ch == 80) {
+            } else if (ch == 80) {
                 g_tui.scrollCyclesDown();
-            }
-            else if (ch == 73) {
+            } else if (ch == 73) {
                 g_tui.scrollDebugUp();
-            }
-            else if (ch == 81) {
+            } else if (ch == 81) {
                 g_tui.scrollDebugDown();
-            }
-            else if (ch == 75) {
+            } else if (ch == 75) {
                 g_tui.scrollExceptionsUp();
-            }
-            else if (ch == 77) {
+            } else if (ch == 77) {
                 g_tui.scrollExceptionsDown();
             }
         }
@@ -1705,63 +1720,61 @@ static void general(
 static void generate_json(const char* output) {
     std::vector<std::string> json;
 
-    json.push_back("{");
-    json.push_back("\n\t\"is_detected\": ");
+    json.emplace_back("{");
+    json.emplace_back("\n\t\"is_detected\": ");
 
     if (VM::detect()) {
-        json.push_back("true,");
+        json.emplace_back("true,");
     }
     else {
-        json.push_back("false,");
+        json.emplace_back("false,");
     }
 
-    json.push_back("\n\t\"brand\": \"");
+    json.emplace_back("\n\t\"brand\": \"");
     json.push_back(VM::brand());
-    json.push_back("\",");
+    json.emplace_back("\",");
 
-    json.push_back("\n\t\"conclusion\": \"");
+    json.emplace_back("\n\t\"conclusion\": \"");
     json.push_back(VM::conclusion());
-    json.push_back("\",");
+    json.emplace_back("\",");
 
-    json.push_back("\n\t\"percentage\": ");
+    json.emplace_back("\n\t\"percentage\": ");
     json.push_back(std::to_string(static_cast<int>(VM::percentage())));
-    json.push_back(",");
+    json.emplace_back(",");
 
-    json.push_back("\n\t\"detected_technique_count\": ");
+    json.emplace_back("\n\t\"detected_technique_count\": ");
     json.push_back(std::to_string(VM::technique_count));
-    json.push_back(",");
+    json.emplace_back(",");
 
-    json.push_back("\n\t\"vm_type\": \"");
+    json.emplace_back("\n\t\"vm_type\": \"");
     json.push_back(VM::type());
-    json.push_back("\",");
+    json.emplace_back("\",");
 
-    json.push_back("\n\t\"is_hardened\": ");
+    json.emplace_back("\n\t\"is_hardened\": ");
     if (VM::is_hardened()) {
-        json.push_back("true,");
+        json.emplace_back("true,");
     }
     else {
-        json.push_back("false,");
+        json.emplace_back("false,");
     }
 
-    json.push_back("\n\t\"detected_techniques\": [");
+    json.emplace_back("\n\t\"detected_techniques\": [");
 
     const auto detected_status = VM::detected_enums();
     if (detected_status.size() == 0) {
-        json.push_back("]\n}");
-    }
-    else {
+        json.emplace_back("]\n}");
+    } else {
         for (size_t i = 0; i < detected_status.size(); i++) {
-            json.push_back("\n\t\t\"");
+            json.emplace_back("\n\t\t\"");
             json.push_back(VM::flag_to_string(detected_status[i]));
 
             if (i == detected_status.size() - 1) {
-                json.push_back("\"");
-            }
-            else {
-                json.push_back("\",");
+                json.emplace_back("\"");
+            } else {
+                json.emplace_back("\",");
             }
         }
-        json.push_back("\n\t]\n}");
+        json.emplace_back("\n\t]\n}");
     }
 
     std::ofstream file(output);
@@ -1773,6 +1786,7 @@ static void generate_json(const char* output) {
     for (const auto& line : json) {
         file << line;
     }
+
     file.close();
 }
 
@@ -1800,7 +1814,7 @@ int main(int argc, char* argv[]) {
         { "--no-ansi", NO_ANSI }, { "--detected-only", DETECTED_ONLY }, { "--json", JSON }
     } };
 
-    std::string potential_null_arg = "";
+    std::string potential_null_arg;
     const char* potential_output_arg = "results.json";
 
     for (i32 i = 1; i < argc; ++i) {
@@ -1808,7 +1822,7 @@ int main(int argc, char* argv[]) {
 
         auto it = std::find_if(table.cbegin(), table.cend(), [&](const std::pair<const char*, i32>& p) {
             return (std::strcmp(p.first, arg_string) == 0);
-            });
+        });
 
         if (it == table.end()) {
             if (arg_bitset.test(OUTPUT)) {
@@ -1817,8 +1831,7 @@ int main(int argc, char* argv[]) {
                     potential_output_arg = arg_string;
                 }
                 arg_bitset.set(OUTPUT, false);
-            }
-            else {
+            } else {
                 arg_bitset.set(NULL_ARG);
                 potential_null_arg = arg_string;
             }
@@ -1832,19 +1845,24 @@ int main(int argc, char* argv[]) {
         std::cerr << "Unknown argument \"" << potential_null_arg << "\", aborting\n";
         return 1;
     }
+
     if (arg_bitset.test(HELP)) {
         help();
     }
+
     if (arg_bitset.test(VERSION)) {
         version();
     }
+
     if (arg_bitset.test(BRAND_LIST)) {
         brand_list();
     }
+
     if (arg_bitset.test(NUMBER)) {
         std::cout << static_cast<u32>(VM::technique_count) << "\n";
         return 0;
     }
+
     if (arg_bitset.test(JSON)) {
         generate_json(potential_output_arg);
         return 0;
@@ -1868,22 +1886,27 @@ int main(int argc, char* argv[]) {
         if (arg_bitset.test(STDOUT)) {
             return (!VM::detect(high_threshold, all, dynamic));
         }
+
         if (arg_bitset.test(PERCENT)) {
             std::cout << static_cast<u32>(VM::percentage(high_threshold, all, dynamic)) << "\n";
             return 0;
         }
+
         if (arg_bitset.test(DETECT)) {
             std::cout << VM::detect(high_threshold, all, dynamic) << "\n";
             return 0;
         }
+
         if (arg_bitset.test(BRAND)) {
             std::cout << VM::brand(VM::MULTIPLE, high_threshold, all, dynamic) << "\n";
             return 0;
         }
+
         if (arg_bitset.test(TYPE)) {
             std::cout << VM::type(VM::MULTIPLE, high_threshold, all, dynamic) << "\n";
             return 0;
         }
+
         if (arg_bitset.test(CONCLUSION)) {
             std::cout << VM::conclusion(VM::MULTIPLE, high_threshold, all, dynamic) << "\n";
             return 0;
