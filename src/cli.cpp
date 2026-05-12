@@ -63,11 +63,14 @@ constexpr const char* ver = "2.7.0";
 constexpr const char* date = "April 2026";
 
 const std::string TH_DIM = "\x1B[38;2;60;60;60m";    // Very Dark Grey (Opacity illusion)
+const std::string TH_WHITE = "\x1B[38;2;255;255;255m"; // Pure White
+
+#if (CLI_WINDOWS)
 const std::string TH_MED = "\x1B[38;2;120;120;120m"; // Normal Grey
 const std::string TH_BRIGHT = "\x1B[38;2;180;180;180m"; // Bright Grey / Normal White
-const std::string TH_WHITE = "\x1B[38;2;255;255;255m"; // Pure White
 const std::string TH_RED = "\x1B[38;2;220;0;0m";     // Pure Red
 const std::string TH_RST = "\x1B[0m";
+#endif
 
 std::string bold = "\x1B[1;97m";
 std::string underline = "\x1B[4m";
