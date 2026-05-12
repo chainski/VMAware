@@ -1027,7 +1027,8 @@ LONG WINAPI VehLogger(PEXCEPTION_POINTERS ep) {
 template<typename... Args>
 void VMAWARE_CLI_DEBUG(Args&&... args) {
     std::ostringstream oss;
-    (oss << ... << args);
+    int dummy[] = { 0, ((void)(oss << std::forward<Args>(args)), 0)... };
+    (void)dummy; 
     std::cout << "[DEBUG] " << oss.str() << "\n";
 }
 #endif
