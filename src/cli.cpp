@@ -1424,8 +1424,8 @@ static void general(
         green = ""; red_orange = ""; green_orange = ""; grey = ""; white = "";
     }
 
-    DebugInterceptor* interceptor = nullptr;
     #if (CLI_WINDOWS)
+        DebugInterceptor* interceptor = nullptr;
         if (!arg_bitset.test(NO_ANSI)) {
             g_tui.init();
             interceptor = new DebugInterceptor(std::cout.rdbuf());
@@ -1848,7 +1848,7 @@ int main(int argc, char* argv[]) {
     const u32 returners = (
         static_cast<u32>(arg_bitset.test(STDOUT)) + static_cast<u32>(arg_bitset.test(PERCENT)) + static_cast<u32>(arg_bitset.test(DETECT)) +
         static_cast<u32>(arg_bitset.test(BRAND)) + static_cast<u32>(arg_bitset.test(TYPE)) + static_cast<u32>(arg_bitset.test(CONCLUSION))
-        );
+    );
 
     const VM::enum_flags high_threshold = (arg_bitset.test(HIGH_THRESHOLD) ? VM::HIGH_THRESHOLD : VM::NULL_ARG);
     const VM::enum_flags all = (arg_bitset.test(ALL) ? VM::ALL : VM::NULL_ARG);
