@@ -23,10 +23,10 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  linux:
+  linux-compilation:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - arch: amd64
@@ -85,10 +85,10 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  macos:
+  macos-compilation:
     runs-on: macos-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - arch: aarch64
@@ -115,11 +115,11 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  windows:
+  windows-compilation:
     runs-on: windows-latest
     timeout-minutes: 5
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - config: 64-debug
@@ -165,30 +165,11 @@ jobs:
           name: ${{ matrix.artifact }}
           path: build\Release\vmaware_${{ github.run_number }}_${{ env.SHORT_SHA }}.exe
 
-  cli-test:
-    needs: [cpp-standard-linux]
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download amd64 binary
-        uses: actions/download-artifact@v4
-        with:
-          name: vmaware-linux-amd64
-          path: build
-
-      - name: Run CLI test suite
-        run: |
-          chmod +x build/vmaware
-          bash auxiliary/test_cli.sh build/vmaware
-
   cpp-standard-linux:
-    needs: [linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         std: [26, 23, 20, 17, 14, 11]
 
@@ -211,11 +192,10 @@ jobs:
         run: cmake --build build --config Release
 
   cpp-standard-macos:
-    needs: [macos]
     runs-on: macos-latest
     timeout-minutes: 10
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         std: [26, 23, 20, 17, 14, 11]
 
@@ -229,11 +209,10 @@ jobs:
         run: cmake --build build --config Release
 
   cpp-standard-windows:
-    needs: [windows]
     runs-on: windows-latest
     timeout-minutes: 10
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         std: [23, 20, 17, 14, 11]
 
@@ -247,11 +226,10 @@ jobs:
         run: cmake --build build --config Release
 
   compiler-compat:
-    needs: [cpp-standard-linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - compiler: g++-12
@@ -284,14 +262,50 @@ jobs:
       - name: Build (${{ matrix.compiler }})
         run: cmake --build build --config Release
 
+  linux:
+    needs: [linux-compilation, cpp-standard-linux, compiler-compat]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Linux builds completed"
+
+  macos:
+    needs: [macos-compilation, cpp-standard-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "MacOS builds completed"
+
+  windows:
+    needs: [windows-compilation, cpp-standard-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Windows builds completed"
+
+  cli-test:
+    needs: [linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: vmaware-linux-amd64
+          path: build
+
+      - name: Run CLI test suite
+        run: |
+          chmod +x build/vmaware
+          bash auxiliary/test_cli.sh build/vmaware
+
   platform-builds:
-    needs: [cpp-standard-linux, cpp-standard-macos, cpp-standard-windows]
+    needs: [linux, macos, windows]
     runs-on: ubuntu-latest
     steps:
       - run: echo "All platform builds completed"
 
   completed:
-    needs: [platform-builds, cli-test, compiler-compat]
+    needs: [platform-builds, cli-test]
     runs-on: ubuntu-latest
     steps:
       - run: echo "All checks passed"
