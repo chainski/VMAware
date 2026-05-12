@@ -85,7 +85,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  cpp-standard-linux:
+  linux-cpp-standard:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -111,7 +111,7 @@ jobs:
       - name: Build (C++${{ matrix.std }})
         run: cmake --build build --config Release
 
-  compiler-compat:
+  linux-compiler-compat:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -178,7 +178,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  cpp-standard-macos:
+  macos-cpp-standard:
     runs-on: macos-latest
     timeout-minutes: 10
     strategy:
@@ -245,7 +245,7 @@ jobs:
           name: ${{ matrix.artifact }}
           path: build\Release\vmaware_${{ github.run_number }}_${{ env.SHORT_SHA }}.exe
 
-  cpp-standard-windows:
+  windows-cpp-standard:
     runs-on: windows-latest
     timeout-minutes: 10
     strategy:
@@ -263,19 +263,19 @@ jobs:
         run: cmake --build build --config Release
 
   linux:
-    needs: [linux-compilation, cpp-standard-linux, compiler-compat]
+    needs: [linux-compilation, linux-cpp-standard, linux-compiler-compat]
     runs-on: ubuntu-latest
     steps:
       - run: echo "Linux builds completed"
 
   macos:
-    needs: [macos-compilation, cpp-standard-macos]
+    needs: [macos-compilation, macos-cpp-standard]
     runs-on: ubuntu-latest
     steps:
       - run: echo "MacOS builds completed"
 
   windows:
-    needs: [windows-compilation, cpp-standard-windows]
+    needs: [windows-compilation, windows-cpp-standard]
     runs-on: ubuntu-latest
     steps:
       - run: echo "Windows builds completed"
