@@ -1789,7 +1789,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    static constexpr std::array<std::pair<const char*, arg_enum>, 32> table{ {
+    static const std::array<std::pair<const char*, arg_enum>, 32> table{ {
         { "-h", HELP }, { "-v", VERSION }, { "-a", ALL }, { "-d", DETECT }, { "-s", STDOUT }, { "-b", BRAND },
         { "-p", PERCENT }, { "-c", CONCLUSION }, { "-l", BRAND_LIST }, { "-n", NUMBER }, { "-t", TYPE }, { "-o", OUTPUT },
         { "help", HELP }, { "--help", HELP }, { "--version", VERSION }, { "--all", ALL }, { "--detect", DETECT },
