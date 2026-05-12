@@ -85,6 +85,69 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  cpp-standard-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: true
+      matrix:
+        std: [26, 23, 20, 17, 14, 11]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install g++-14
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends g++-14 cmake
+
+      - name: Configure (C++${{ matrix.std }})
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=${{ matrix.std }} \
+            -DCMAKE_CXX_COMPILER=g++-14
+
+      - name: Build (C++${{ matrix.std }})
+        run: cmake --build build --config Release
+
+  compiler-compat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - compiler: g++-12
+            package: g++-12
+          - compiler: g++-13
+            package: g++-13
+          - compiler: g++-14
+            package: g++-14
+          - compiler: clang++-16
+            package: clang-16
+          - compiler: clang++-17
+            package: clang-17
+          - compiler: clang++-18
+            package: clang-18
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ${{ matrix.compiler }}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends cmake ${{ matrix.package }}
+
+      - name: Configure (${{ matrix.compiler }})
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+
+      - name: Build (${{ matrix.compiler }})
+        run: cmake --build build --config Release
+
   macos-compilation:
     runs-on: macos-latest
     strategy:
@@ -114,6 +177,23 @@ jobs:
           path: build/vmaware
           if-no-files-found: error
           retention-days: 30
+
+  cpp-standard-macos:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: true
+      matrix:
+        std: [26, 23, 20, 17, 14, 11]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (C++${{ matrix.std }})
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=${{ matrix.std }}
+
+      - name: Build (C++${{ matrix.std }})
+        run: cmake --build build --config Release
 
   windows-compilation:
     runs-on: windows-latest
@@ -165,49 +245,6 @@ jobs:
           name: ${{ matrix.artifact }}
           path: build\Release\vmaware_${{ github.run_number }}_${{ env.SHORT_SHA }}.exe
 
-  cpp-standard-linux:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      fail-fast: true
-      matrix:
-        std: [26, 23, 20, 17, 14, 11]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install g++-14
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends g++-14 cmake
-
-      - name: Configure (C++${{ matrix.std }})
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_STANDARD=${{ matrix.std }} \
-            -DCMAKE_CXX_COMPILER=g++-14
-
-      - name: Build (C++${{ matrix.std }})
-        run: cmake --build build --config Release
-
-  cpp-standard-macos:
-    runs-on: macos-latest
-    timeout-minutes: 10
-    strategy:
-      fail-fast: true
-      matrix:
-        std: [26, 23, 20, 17, 14, 11]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure (C++${{ matrix.std }})
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=${{ matrix.std }}
-
-      - name: Build (C++${{ matrix.std }})
-        run: cmake --build build --config Release
-
   cpp-standard-windows:
     runs-on: windows-latest
     timeout-minutes: 10
@@ -223,43 +260,6 @@ jobs:
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=${{ matrix.std }}
 
       - name: Build (C++${{ matrix.std }})
-        run: cmake --build build --config Release
-
-  compiler-compat:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - compiler: g++-12
-            package: g++-12
-          - compiler: g++-13
-            package: g++-13
-          - compiler: g++-14
-            package: g++-14
-          - compiler: clang++-16
-            package: clang-16
-          - compiler: clang++-17
-            package: clang-17
-          - compiler: clang++-18
-            package: clang-18
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install ${{ matrix.compiler }}
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends cmake ${{ matrix.package }}
-
-      - name: Configure (${{ matrix.compiler }})
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
-
-      - name: Build (${{ matrix.compiler }})
         run: cmake --build build --config Release
 
   linux:
