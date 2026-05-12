@@ -6060,7 +6060,7 @@ public:
                     const u32 xss_delta = active_total_size - active_xcr0_size;
 
                     if (xss_delta != 0x10) {
-                        debug("TIMER: VMAware detected a SVM hypervisor with cpuid interception disabled, score was raised up due to a bypass attempt. XSAVE Delta: 0x%X", xss_delta);
+                        debug("TIMER: VMAware detected a SVM hypervisor with cpuid interception disabled, score was raised up due to a bypass attempt");
                         bypass_detected = true;
                     }
                 }
