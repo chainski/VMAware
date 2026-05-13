@@ -1,0 +1,585 @@
+#include "strings.hpp"
+#include "sha256.hpp"
+#include "windows_cli.hpp"
+
+#if (CLI_WINDOWS)
+
+bool TuiManager::updateBoxWidth(size_t incoming_len) {
+    // Enforce safe boundary so it never line-wraps out of bounds
+    size_t max_allowed = static_cast<size_t>(console_width - right_x - 22);
+    if (incoming_len > max_allowed) {
+        incoming_len = max_allowed;
+    }
+
+    if (incoming_len > global_box_width) {
+        global_box_width = incoming_len;
+        return true;
+    }
+    return false;
+}
+
+void TuiManager::init() {
+    HWND hwnd = GetConsoleWindow();
+    if (hwnd) {
+        ShowWindow(hwnd, SW_MAXIMIZE);
+    }
+
+    hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleOutputCP(CP_UTF8);
+    enabled = true;
+
+    orig_buf = std::cout.rdbuf();
+    raw_out = new std::ostream(orig_buf);
+
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(hOut, &csbi);
+
+    if (csbi.dwCursorPosition.Y + 400 > csbi.dwSize.Y) {
+        COORD newSize = { csbi.dwSize.X, static_cast<SHORT>(csbi.dwCursorPosition.Y + 400) };
+        SetConsoleScreenBufferSize(hOut, newSize);
+    }
+
+    console_width = csbi.dwSize.X;
+    right_x = 88;
+
+#ifndef __VMAWARE_DEBUG__
+    debugs.push_back(TH_DIM + std::string("Compile in debug mode to view detailed logs.") + TH_RST);
+#endif
+
+    printHeader();
+}
+
+TuiManager::~TuiManager() {
+    if (raw_out) {
+        delete raw_out;
+    }
+}
+
+void TuiManager::printHeader() {
+    std::string arch, vendor, ucode, os;
+    int family = 0, model = 0, stepping = 0;
+
+    SYSTEM_INFO si;
+    GetNativeSystemInfo(&si);
+
+    if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64) {
+        arch = "x64";
+    }
+    else if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_INTEL) {
+        arch = "x86";
+    }
+    else if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_ARM64) {
+        arch = "ARM64";
+    }
+    else {
+        arch = "Unknown";
+    }
+
+    int cpuInfo[4] = { 0 };
+    __cpuid(cpuInfo, 0);
+    char vendorStr[13] = { 0 };
+    memcpy(vendorStr, &cpuInfo[1], 4);
+    memcpy(vendorStr + 4, &cpuInfo[3], 4);
+    memcpy(vendorStr + 8, &cpuInfo[2], 4);
+    vendor = vendorStr;
+
+    g_max_std = cpuInfo[0];
+    __cpuid(cpuInfo, 0x40000000);
+    g_max_hyp = cpuInfo[0];
+    __cpuid(cpuInfo, 0x80000000);
+    g_max_ext = cpuInfo[0];
+
+    __cpuid(cpuInfo, 1);
+    stepping = cpuInfo[0] & 0xF;
+    model = (cpuInfo[0] >> 4) & 0xF;
+    family = (cpuInfo[0] >> 8) & 0xF;
+    if (family == 6 || family == 15) {
+        model += ((cpuInfo[0] >> 16) & 0xF) << 4;
+    }
+    if (family == 15) {
+        family += (cpuInfo[0] >> 20) & 0xFF;
+    }
+
+    HKEY hKey;
+    ucode = "N/A";
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD type;
+        BYTE data[8];
+        DWORD size = sizeof(data);
+        if (RegQueryValueExA(hKey, "Update Revision", NULL, &type, data, &size) == ERROR_SUCCESS && type == REG_BINARY) {
+            std::ostringstream ucode_oss;
+            uint64_t full_val = 0;
+            memcpy(&full_val, data, std::min(size, static_cast<DWORD>(sizeof(full_val))));
+            DWORD ucode_val = static_cast<DWORD>(full_val >> 32);
+            if (ucode_val == 0) {
+                ucode_val = static_cast<DWORD>(full_val);
+            }
+            ucode_oss << "0x" << std::hex << ucode_val;
+            ucode = ucode_oss.str();
+        }
+        RegCloseKey(hKey);
+    }
+
+    typedef NTSTATUS(WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
+    HMODULE hMod = GetModuleHandleA("ntdll.dll");
+    if (hMod) {
+        RtlGetVersionPtr pRtlGetVersion = reinterpret_cast<RtlGetVersionPtr>(GetProcAddress(hMod, "RtlGetVersion"));
+        if (pRtlGetVersion) {
+            RTL_OSVERSIONINFOW rovi = { 0 };
+            rovi.dwOSVersionInfoSize = sizeof(rovi);
+            if (pRtlGetVersion(&rovi) == 0) {
+                std::ostringstream os_oss;
+                if (rovi.dwMajorVersion == 10 && rovi.dwBuildNumber >= 22000) {
+                    os_oss << "Windows 11 (" << rovi.dwBuildNumber << ")";
+                }
+                else if (rovi.dwMajorVersion == 10) {
+                    os_oss << "Windows 10 (" << rovi.dwBuildNumber << ")";
+                }
+                else {
+                    os_oss << "Windows " << rovi.dwMajorVersion << "." << rovi.dwMinorVersion << " (" << rovi.dwBuildNumber << ")";
+                }
+                os = os_oss.str();
+            }
+        }
+    }
+
+    std::string hash_display = compute_self_sha256();
+
+    std::string raw_header_text = "arch: " + arch + " / vendor: " + vendor + " / family: " + std::to_string(family) +
+        " / model: " + std::to_string(model) + " / stepping: " + std::to_string(stepping) +
+        " / microcode: " + ucode + " / os: " + os + " / sha256: " + hash_display;
+
+    int padding_val = (static_cast<int>(console_width) - static_cast<int>(raw_header_text.length())) / 2;
+    if (padding_val < 0) {
+        padding_val = 0;
+    }
+
+    std::string pad_str(static_cast<size_t>(padding_val), ' ');
+
+    *raw_out << pad_str
+        << TH_DIM << "arch: " << TH_BRIGHT << arch << TH_DIM
+        << " / vendor: " << TH_BRIGHT << vendor << TH_DIM
+        << " / family: " << TH_BRIGHT << family << TH_DIM
+        << " / model: " << TH_BRIGHT << model << TH_DIM
+        << " / stepping: " << TH_BRIGHT << stepping << TH_DIM
+        << " / microcode: " << TH_BRIGHT << ucode << TH_DIM
+        << " / os: " << TH_BRIGHT << os << TH_DIM
+        << " / sha256: " << TH_BRIGHT << hash_display << TH_RST << "\n\n";
+
+    *raw_out << TH_DIM << repeat_str("─", static_cast<size_t>(console_width) - 1) << TH_RST << "\n";
+
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(hOut, &csbi);
+    start_y = csbi.dwCursorPosition.Y + 1; // gap
+    left_y = start_y;
+    exception_y = start_y;
+
+    redrawAllBoxes(); // Draws initial boxes and bracket
+}
+
+void TuiManager::printLeft(const std::string& str) {
+    if (!enabled) {
+        std::cout << str << "\n";
+        return;
+    }
+    std::lock_guard<std::mutex> lock(mtx);
+    SetConsoleCursorPosition(hOut, { left_margin, left_y });
+    *raw_out << str << std::flush;
+    left_y++;
+}
+
+void TuiManager::clearBoxes() {
+    std::string wipe_str(static_cast<size_t>(console_width - right_x), ' ');
+    // Clear to prevent any overflowing logs from lingering
+    for (SHORT i = 0; i < 80; i++) {
+        SetConsoleCursorPosition(hOut, { right_x, static_cast<SHORT>(exception_y + i) });
+        *raw_out << TH_RST << wipe_str;
+    }
+}
+
+void TuiManager::redrawAllBoxes() {
+    if (!enabled) return;
+    SHORT draw_y = exception_y;
+    size_t content_w = global_box_width - 4;
+
+    // 1. Exceptions Box
+    if (!exceptions.empty()) {
+        const auto& lines = exceptions[exc_scroll_index];
+        SetConsoleCursorPosition(hOut, { right_x, draw_y++ });
+        *raw_out << TH_DIM << "┌─ " << TH_WHITE << "Exceptions" << TH_DIM << " " << repeat_str("─", global_box_width - 15) << "┐" << TH_RST << "\x1B[K";
+
+        for (size_t i = 0; i < lines.size(); i++) {
+            SetConsoleCursorPosition(hOut, { right_x, draw_y++ });
+            *raw_out << TH_DIM << "│ " << TH_RST << pad(lines[i], content_w) << TH_DIM << " │" << TH_RST << "\x1B[K";
+        }
+    }
+    else {
+        SetConsoleCursorPosition(hOut, { right_x, draw_y++ });
+        *raw_out << TH_DIM << "┌─ " << TH_WHITE << "Exceptions" << TH_DIM << " " << repeat_str("─", global_box_width - 15) << "┐" << TH_RST << "\x1B[K";
+        for (size_t i = 0; i < (size_t)box_height - 2; i++) {
+            SetConsoleCursorPosition(hOut, { right_x, draw_y++ });
+            *raw_out << TH_DIM << "│ " << TH_RST << pad("", content_w) << TH_DIM << " │" << TH_RST << "\x1B[K";
+        }
+    }
+    SetConsoleCursorPosition(hOut, { right_x, draw_y++ });
+    *raw_out << TH_DIM << "└" << repeat_str("─", global_box_width - 2) << "┘" << TH_RST << "\x1B[K";
+    SetConsoleCursorPosition(hOut, { right_x, draw_y++ });
+    *raw_out << TH_DIM << " Use Left/Right arrows to scroll " << TH_RST << "\x1B[K";
+
+    SetConsoleCursorPosition(hOut, { right_x, draw_y++ });
+    *raw_out << TH_RST << "\x1B[K"; // Ensure gap is cleared
+
+    // 2. Timings Box
+    draw_y = drawBoxInternal(draw_y, global_box_width, "Timings", cycles, cyc_scroll_index, "Use Up/Down arrows to scroll");
+
+    SetConsoleCursorPosition(hOut, { right_x, draw_y++ });
+    *raw_out << TH_RST << "\x1B[K"; // same here
+
+    // 3. Debug Box
+    draw_y = drawBoxInternal(draw_y, global_box_width, "Debug", debugs, dbg_scroll_index, "Use PgUp/PgDn to scroll");
+
+    // 4. Right-side encapsulation bracket for CPUID leaves
+    SHORT bottom_y = draw_y - 1; // Ends exactly at the Debug control text line
+    SHORT bracket_x = right_x + static_cast<SHORT>(global_box_width) + 4;
+
+    SetConsoleCursorPosition(hOut, { bracket_x, exception_y });
+    *raw_out << TH_WHITE << "┐" << TH_RST; // Pointing left (arms go left, spine is vertical)
+
+    for (SHORT y = static_cast<SHORT>(exception_y + 1); y < bottom_y; y++) {
+        SetConsoleCursorPosition(hOut, { bracket_x, y });
+        *raw_out << TH_WHITE << "│" << TH_RST;
+    }
+
+    SetConsoleCursorPosition(hOut, { bracket_x, bottom_y });
+    *raw_out << TH_WHITE << "┘" << TH_RST;
+
+    SHORT mid_y = exception_y + (bottom_y - exception_y) / 2;
+    SHORT text_x = bracket_x + 3;
+
+    SetConsoleCursorPosition(hOut, { text_x, static_cast<SHORT>(mid_y - 1) });
+    *raw_out << TH_DIM << "s: " << TH_WHITE << "0x" << std::hex << std::setfill('0') << std::setw(8) << g_max_std << TH_RST << "\x1B[K";
+    SetConsoleCursorPosition(hOut, { text_x, mid_y });
+    *raw_out << TH_DIM << "h: " << TH_WHITE << "0x" << std::hex << std::setfill('0') << std::setw(8) << g_max_hyp << TH_RST << "\x1B[K";
+    SetConsoleCursorPosition(hOut, { text_x, static_cast<SHORT>(mid_y + 1) });
+    *raw_out << TH_DIM << "e: " << TH_WHITE << "0x" << std::hex << std::setfill('0') << std::setw(8) << g_max_ext << TH_RST << "\x1B[K";
+
+    // Re-align to primary drawing coords
+    SetConsoleCursorPosition(hOut, { left_margin, left_y });
+    *raw_out << std::flush;
+}
+
+SHORT TuiManager::drawBoxInternal(SHORT startY, size_t box_width, const std::string& title, const std::vector<std::string>& items, size_t scroll_idx, const std::string& controls) {
+    SHORT draw_y = startY;
+    size_t content_w = box_width - 4;
+    size_t title_len = visible_length(title);
+    size_t dash_count = (box_width >= 5 + title_len) ? (box_width - 5 - title_len) : 0;
+
+    SetConsoleCursorPosition(hOut, { right_x, draw_y++ });
+    *raw_out << TH_DIM << "┌─ " << TH_WHITE << title << " " << TH_DIM << repeat_str("─", dash_count) << "┐" << TH_RST << "\x1B[K" << std::flush;
+
+    size_t limit = box_height - 2;
+    for (size_t i = 0; i < limit; i++) {
+        SetConsoleCursorPosition(hOut, { right_x, draw_y++ });
+        if (scroll_idx + i < items.size()) {
+            *raw_out << TH_DIM << "│ " << TH_RST << pad(items[scroll_idx + i], content_w) << TH_DIM << " │" << TH_RST << "\x1B[K" << std::flush;
+        }
+        else {
+            *raw_out << TH_DIM << "│ " << TH_RST << pad("", content_w) << TH_DIM << " │" << TH_RST << "\x1B[K" << std::flush;
+        }
+    }
+
+    SetConsoleCursorPosition(hOut, { right_x, draw_y++ });
+    *raw_out << TH_DIM << "└" << repeat_str("─", box_width - 2) << "┘" << TH_RST << "\x1B[K" << std::flush;
+
+    SetConsoleCursorPosition(hOut, { right_x, draw_y++ });
+    *raw_out << TH_DIM << " " << controls << " " << TH_RST << "\x1B[K" << std::flush;
+    return draw_y;
+}
+
+void TuiManager::addException(const std::vector<std::string>& lines) {
+    if (!enabled) return;
+    bool resized = false;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        exceptions.push_back(lines);
+        exc_scroll_index = exceptions.size() - 1;
+
+        for (const auto& l : lines) {
+            if (this->updateBoxWidth(visible_length(l) + 4)) {
+                resized = true;
+            }
+        }
+    }
+    std::lock_guard<std::mutex> draw_lock(mtx);
+    if (resized) {
+        clearBoxes();
+    }
+    redrawAllBoxes();
+}
+
+void TuiManager::addCycle(const std::string& line) {
+    if (!enabled) return;
+    bool resized = false;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        cycles.push_back(line);
+        if (cycles.size() > static_cast<size_t>(box_height - 2)) {
+            cyc_scroll_index = cycles.size() - static_cast<size_t>(box_height - 2);
+        }
+        if (this->updateBoxWidth(visible_length(line) + 4)) {
+            resized = true;
+        }
+    }
+    std::lock_guard<std::mutex> draw_lock(mtx);
+    if (resized) {
+        clearBoxes();
+    }
+    redrawAllBoxes();
+}
+
+void TuiManager::addDebug(const std::string& line) {
+    if (!enabled) return;
+    bool resized = false;
+
+    std::string colored_line;
+    size_t pos = 0;
+
+    // find the first ':' that is followed by a space ' '
+    pos = line.find(": ");
+
+    if (pos != std::string::npos) {
+        // left of ':' is pure white, right of ':' is dark grey
+        colored_line = TH_WHITE + line.substr(0, pos) + TH_DIM + line.substr(pos) + TH_RST;
+    }
+    else {
+        colored_line = TH_DIM + line + TH_RST;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        debugs.push_back(colored_line);
+        if (debugs.size() > static_cast<size_t>(box_height - 2)) {
+            dbg_scroll_index = debugs.size() - static_cast<size_t>(box_height - 2);
+        }
+        if (this->updateBoxWidth(visible_length(colored_line) + 4)) {
+            resized = true;
+        }
+    }
+    std::lock_guard<std::mutex> draw_lock(mtx);
+    if (resized) {
+        clearBoxes();
+    }
+    redrawAllBoxes();
+}
+
+void TuiManager::scrollExceptionsUp() {
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        if (exc_scroll_index > 0) {
+            exc_scroll_index--;
+        }
+    }
+    std::lock_guard<std::mutex> draw_lock(mtx);
+    redrawAllBoxes();
+}
+
+void TuiManager::scrollExceptionsDown() {
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        if (exc_scroll_index + 1 < exceptions.size()) {
+            exc_scroll_index++;
+        }
+    }
+    std::lock_guard<std::mutex> draw_lock(mtx);
+    redrawAllBoxes();
+}
+
+void TuiManager::scrollCyclesUp() {
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        if (cyc_scroll_index > 0) {
+            cyc_scroll_index--;
+        }
+    }
+    std::lock_guard<std::mutex> draw_lock(mtx);
+    redrawAllBoxes();
+}
+
+void TuiManager::scrollCyclesDown() {
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        if (cyc_scroll_index + static_cast<size_t>(box_height - 2) < cycles.size()) {
+            cyc_scroll_index++;
+        }
+    }
+    std::lock_guard<std::mutex> draw_lock(mtx);
+    redrawAllBoxes();
+}
+
+void TuiManager::scrollDebugUp() {
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        if (dbg_scroll_index > 0) {
+            dbg_scroll_index--;
+        }
+    }
+    std::lock_guard<std::mutex> draw_lock(mtx);
+    redrawAllBoxes();
+}
+
+void TuiManager::scrollDebugDown() {
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        if (dbg_scroll_index + static_cast<size_t>(box_height - 2) < debugs.size()) {
+            dbg_scroll_index++;
+        }
+    }
+    std::lock_guard<std::mutex> draw_lock(mtx);
+    redrawAllBoxes();
+}
+
+void TuiManager::drawSummaryBox(const std::vector<std::string>& lines) {
+    if (!enabled) return;
+    SHORT draw_y = left_y + 1;
+
+    size_t max_len = 0;
+    for (auto& l : lines) {
+        max_len = std::max(max_len, visible_length(l));
+    }
+    SHORT box_width = static_cast<SHORT>(std::max(static_cast<size_t>(80), max_len + 4));
+
+    SetConsoleCursorPosition(hOut, { left_margin, draw_y++ });
+    *raw_out << TH_DIM << "┌" << repeat_str("─", static_cast<size_t>(box_width)) << "┐" << TH_RST << "\n";
+
+    for (const auto& line : lines) {
+        SetConsoleCursorPosition(hOut, { left_margin, draw_y++ });
+        *raw_out << TH_DIM << "│ " << TH_RST << pad(line, static_cast<size_t>(box_width - 2)) << TH_DIM << " │" << TH_RST << "\n";
+    }
+
+    SetConsoleCursorPosition(hOut, { left_margin, draw_y++ });
+    *raw_out << TH_DIM << "└" << repeat_str("─", static_cast<size_t>(box_width)) << "┘" << TH_RST << "\n";
+
+    left_y = draw_y;
+}
+
+void TuiManager::finalize() {
+    if (!enabled) return;
+    SetConsoleCursorPosition(hOut, { left_margin, left_y });
+    *raw_out << TH_RST << "\n" << std::flush;
+}
+
+DebugInterceptor::~DebugInterceptor() {
+    if (!buffer.empty()) {
+        std::ostream os(original);
+        os << buffer;
+    }
+}
+
+DebugInterceptor::int_type DebugInterceptor::overflow(int_type c) {
+    if (c != EOF) {
+        buffer += static_cast<char>(c);
+        return c;
+    }
+
+    if (c != '\n') {
+        return c;
+    }
+
+    if (buffer.find('\t') != std::string::npos) {
+        size_t pos;
+        while ((pos = buffer.find('\t')) != std::string::npos) {
+            buffer.replace(pos, 1, "    ");
+        }
+    }
+
+    std::string msg = buffer;
+    if (msg.find("[DEBUG]") == 0) {
+        msg = msg.substr(7);
+        if (!msg.empty() && msg[0] == ' ') {
+            msg = msg.substr(1);
+        }
+        g_tui.addDebug(msg);
+    }
+    else {
+        if (g_tui.raw_out) {
+            SetConsoleCursorPosition(g_tui.hOut, { g_tui.left_margin, g_tui.left_y });
+            *(g_tui.raw_out) << buffer << "\n";
+            g_tui.left_y++; // Safely increments tracker if string breaches
+        }
+        else {
+            std::ostream os(original);
+            os << buffer << "\n";
+        }
+    }
+    buffer.clear();
+
+    return c;
+}
+
+// Called by the stream when writing multiple characters at once (e.g. operator<<).
+// Routes each character through overflow() where the newline and [DEBUG] logic lives.
+std::streamsize DebugInterceptor::xsputn(const char* s, std::streamsize n) {
+    for (std::streamsize i = 0; i < n; ++i) {
+        overflow(s[i]);
+    }
+    return n;
+}
+
+LONG WINAPI VehLogger(PEXCEPTION_POINTERS ep) {
+    if (!g_tui.enabled) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+
+    std::string c_white = TH_WHITE;  // pure white numbers
+    std::string c_grey = TH_DIM;    // dark grey strings
+    std::string c_rst = TH_RST;
+
+    auto to_hex = [](auto val) {
+        std::ostringstream oss;
+        oss << "0x" << std::hex << std::uppercase << (uint64_t)val;
+        return oss.str();
+    };
+    auto hex_pad = [&](auto val, int width) {
+        return pad(to_hex(val), static_cast<size_t>(width));
+    };
+
+    std::vector<std::string> lines;
+    lines.push_back(c_gry + "Exception Hit: " + c_val + to_hex(ep->ExceptionRecord->ExceptionCode) + c_rst);
+    lines.push_back(c_gry + "Address: " + c_val + to_hex(ep->ExceptionRecord->ExceptionAddress) + c_rst);
+    lines.push_back(c_gry + "Flags: " + c_val + hex_pad(ep->ExceptionRecord->ExceptionFlags, 6) + c_gry + " Params: " + c_val + std::to_string(ep->ExceptionRecord->NumberParameters) + c_rst);
+    lines.push_back("");
+
+#ifdef _M_X64
+    lines.push_back(c_gry + "RIP: " + c_val + hex_pad(ep->ContextRecord->Rip, 18) + c_gry + " RSP: " + c_val + to_hex(ep->ContextRecord->Rsp) + c_rst);
+    lines.push_back(c_gry + "RAX: " + c_val + hex_pad(ep->ContextRecord->Rax, 18) + c_gry + " RCX: " + c_val + to_hex(ep->ContextRecord->Rcx) + c_rst);
+    lines.push_back(c_gry + "RDX: " + c_val + hex_pad(ep->ContextRecord->Rdx, 18) + c_gry + " RBX: " + c_val + to_hex(ep->ContextRecord->Rbx) + c_rst);
+    lines.push_back(c_gry + "RBP: " + c_val + hex_pad(ep->ContextRecord->Rbp, 18) + c_gry + " RSI: " + c_val + to_hex(ep->ContextRecord->Rsi) + c_rst);
+    lines.push_back(c_gry + "RDI: " + c_val + hex_pad(ep->ContextRecord->Rdi, 18) + c_gry + " EFL: " + c_val + to_hex(ep->ContextRecord->EFlags) + c_rst);
+    lines.push_back(c_gry + "R8 : " + c_val + hex_pad(ep->ContextRecord->R8, 18) + c_gry + " R9 : " + c_val + to_hex(ep->ContextRecord->R9) + c_rst);
+    lines.push_back(c_gry + "R10: " + c_val + hex_pad(ep->ContextRecord->R10, 18) + c_gry + " R11: " + c_val + to_hex(ep->ContextRecord->R11) + c_rst);
+    lines.push_back(c_gry + "R12: " + c_val + hex_pad(ep->ContextRecord->R12, 18) + c_gry + " R13: " + c_val + to_hex(ep->ContextRecord->R13) + c_rst);
+    lines.push_back(c_gry + "R14: " + c_val + hex_pad(ep->ContextRecord->R14, 18) + c_gry + " R15: " + c_val + to_hex(ep->ContextRecord->R15) + c_rst);
+    lines.push_back("");
+    lines.push_back(c_gry + "CS: " + c_val + hex_pad(ep->ContextRecord->SegCs, 8) + c_gry + " DS: " + c_val + hex_pad(ep->ContextRecord->SegDs, 8) + c_gry + " SS: " + c_val + to_hex(ep->ContextRecord->SegSs) + c_rst);
+    lines.push_back(c_gry + "ES: " + c_val + hex_pad(ep->ContextRecord->SegEs, 8) + c_gry + " FS: " + c_val + hex_pad(ep->ContextRecord->SegFs, 8) + c_gry + " GS: " + c_val + to_hex(ep->ContextRecord->SegGs) + c_rst);
+    lines.push_back("");
+    lines.push_back(c_gry + "Dr0: " + c_val + hex_pad(ep->ContextRecord->Dr0, 18) + c_gry + " Dr1: " + c_val + to_hex(ep->ContextRecord->Dr1) + c_rst);
+    lines.push_back(c_gry + "Dr2: " + c_val + hex_pad(ep->ContextRecord->Dr2, 18) + c_gry + " Dr3: " + c_val + to_hex(ep->ContextRecord->Dr3) + c_rst);
+    lines.push_back(c_gry + "Dr6: " + c_val + hex_pad(ep->ContextRecord->Dr6, 18) + c_gry + " Dr7: " + c_val + to_hex(ep->ContextRecord->Dr7) + c_rst);
+    lines.push_back("");
+    lines.push_back(c_gry + "ContextFlags: " + c_val + hex_pad(ep->ContextRecord->ContextFlags, 10) + c_gry + " MxCsr: " + c_val + to_hex(ep->ContextRecord->MxCsr) + c_rst);
+    lines.push_back(c_gry + "DebugControl: " + c_val + to_hex(ep->ContextRecord->DebugControl) + c_rst);
+#else
+    lines.push_back(c_gry + "EIP: " + c_val + hex_pad(ep->ContextRecord->Eip, 10) + c_gry + " ESP: " + c_val + to_hex(ep->ContextRecord->Esp) + c_rst);
+    lines.push_back(c_gry + "EAX: " + c_val + hex_pad(ep->ContextRecord->Eax, 10) + c_gry + " ECX: " + c_val + to_hex(ep->ContextRecord->Ecx) + c_rst);
+    lines.push_back(c_gry + "EDX: " + c_val + hex_pad(ep->ContextRecord->Edx, 10) + c_gry + " EBX: " + c_val + to_hex(ep->ContextRecord->Ebx) + c_rst);
+    lines.push_back(c_gry + "EBP: " + c_val + hex_pad(ep->ContextRecord->Ebp, 10) + c_gry + " ESI: " + c_val + to_hex(ep->ContextRecord->Esi) + c_rst);
+    lines.push_back(c_gry + "EDI: " + c_val + hex_pad(ep->ContextRecord->Edi, 10) + c_gry + " EFL: " + c_val + to_hex(ep->ContextRecord->EFlags) + c_rst);
+#endif
+
+    g_tui.addException(lines);
+
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+#endif
