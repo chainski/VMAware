@@ -22,38 +22,58 @@
     #define CLI_WINDOWS 0
 #endif
 
-inline const std::string TH_DIM   = "\x1B[38;2;60;60;60m";
-inline const std::string TH_MED   = "\x1B[38;2;120;120;120m";
-inline const std::string TH_WHITE = "\x1B[38;2;255;255;255m";
-inline const std::string TH_RST   = "\x1B[0m";
+extern const std::string TH_DIM;
+extern const std::string TH_MED;
+extern const std::string TH_WHITE;
+extern const std::string TH_RST;
 
 #if (CLI_WINDOWS)
-inline const std::string TH_BRIGHT = "\x1B[38;2;180;180;180m";
-inline const std::string TH_RED    = "\x1B[38;2;220;0;0m";
+extern const std::string TH_BRIGHT;
+extern const std::string TH_RED;
 #endif
 
-inline std::string bold = "\x1B[1;97m";
-inline std::string underline = "\x1B[4m";
-inline std::string ansi_exit = "\x1B[0m";
-inline std::string red = "\x1B[31m";
-inline std::string orange = "\x1B[38;2;180;50;0m";
-inline std::string green = "\x1B[38;2;60;60;60m";
-inline std::string red_orange = "\x1B[31m";
-inline std::string green_orange = "\x1B[38;2;60;60;60m";
-inline std::string grey = "\x1B[38;2;60;60;60m";
-inline std::string white = "\x1B[38;2;255;255;255m";
+extern std::string bold;
+extern std::string underline;
+extern std::string ansi_exit;
+extern std::string red;
+extern std::string orange;
+extern std::string green;
+extern std::string red_orange;
+extern std::string green_orange;
+extern std::string grey;
+extern std::string white;
 
 enum arg_enum : u8 {
-    HELP, VERSION, ALL, DETECT, STDOUT, BRAND, BRAND_LIST, PERCENT, CONCLUSION, NUMBER, TYPE, OUTPUT, NOTES, HIGH_THRESHOLD, NO_ANSI, DYNAMIC, VERBOSE, ENUMS, DETECTED_ONLY, JSON, NULL_ARG
+    HELP, 
+    VERSION, 
+    ALL, 
+    DETECT, 
+    STDOUT, 
+    BRAND, 
+    BRAND_LIST, 
+    PERCENT, 
+    CONCLUSION, 
+    NUMBER, 
+    TYPE, 
+    OUTPUT, 
+    NOTES, 
+    HIGH_THRESHOLD, 
+    NO_ANSI, 
+    DYNAMIC, 
+    VERBOSE, 
+    ENUMS, 
+    DETECTED_ONLY, 
+    JSON, 
+    NULL_ARG
 };
 
 constexpr u8 arg_bits = static_cast<u8>(NULL_ARG) + 1;
-inline std::bitset<arg_bits> arg_bitset;
+extern std::bitset<arg_bits> arg_bitset;
 
-inline u8 unsupported_count = 0;
-inline u8 supported_count   = 0;
-inline u8 no_perms_count    = 0;
-inline u8 disabled_count    = 0;
+extern u8 unsupported_count;
+extern u8 supported_count;
+extern u8 no_perms_count;
+extern u8 disabled_count;
 
-inline std::string detected     = ("\x1B[97m[\x1B[31m  DETECTED  \x1B[97m]\x1B[0m");
-inline std::string not_detected = ("   \x1B[97m[\x1B[90mNOT DETECTED\x1B[97m]\x1B[0m");
+extern std::string tag_detected;
+extern std::string tag_not_detected;

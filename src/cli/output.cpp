@@ -284,9 +284,9 @@ static void checker(const VM::enum_flags flag, const char* message) {
     std::ostringstream msg_oss;
 
     if (result) {
-        msg_oss << white << "🪲 " << white << detected << " " << white << "Checking " << message << "..." << ansi_exit << enum_name;
+        msg_oss << white << "🪲 " << white << tag_detected << " " << white << "Checking " << message << "..." << ansi_exit << enum_name;
     } else {
-        msg_oss << not_detected << " " << grey << "Checking " << message << "..." << ansi_exit << enum_name;
+        msg_oss << tag_not_detected << " " << grey << "Checking " << message << "..." << ansi_exit << enum_name;
     }
 
     PRINT_LINE(msg_oss.str());
@@ -462,8 +462,8 @@ void general(bool high_threshold, bool all, bool dynamic) {
     #endif
 
     if (arg_bitset.test(NO_ANSI)) {
-        detected = ("[  DETECTED  ]");
-        not_detected = ("   [NOT DETECTED]");
+        tag_detected = ("[  DETECTED  ]");
+        tag_not_detected = ("   [NOT DETECTED]");
         bold = ""; underline = ""; ansi_exit = ""; red = ""; orange = "";
         green = ""; red_orange = ""; green_orange = ""; grey = ""; white = "";
     }

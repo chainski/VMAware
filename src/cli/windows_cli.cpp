@@ -544,37 +544,37 @@ LONG WINAPI VehLogger(PEXCEPTION_POINTERS ep) {
     };
 
     std::vector<std::string> lines;
-    lines.push_back(c_gry + "Exception Hit: " + c_val + to_hex(ep->ExceptionRecord->ExceptionCode) + c_rst);
-    lines.push_back(c_gry + "Address: " + c_val + to_hex(ep->ExceptionRecord->ExceptionAddress) + c_rst);
-    lines.push_back(c_gry + "Flags: " + c_val + hex_pad(ep->ExceptionRecord->ExceptionFlags, 6) + c_gry + " Params: " + c_val + std::to_string(ep->ExceptionRecord->NumberParameters) + c_rst);
+    lines.push_back(c_grey + "Exception Hit: " + c_white + to_hex(ep->ExceptionRecord->ExceptionCode) + c_rst);
+    lines.push_back(c_grey + "Address: " + c_white + to_hex(ep->ExceptionRecord->ExceptionAddress) + c_rst);
+    lines.push_back(c_grey + "Flags: " + c_white + hex_pad(ep->ExceptionRecord->ExceptionFlags, 6) + c_grey + " Params: " + c_white + std::to_string(ep->ExceptionRecord->NumberParameters) + c_rst);
     lines.push_back("");
 
 #ifdef _M_X64
-    lines.push_back(c_gry + "RIP: " + c_val + hex_pad(ep->ContextRecord->Rip, 18) + c_gry + " RSP: " + c_val + to_hex(ep->ContextRecord->Rsp) + c_rst);
-    lines.push_back(c_gry + "RAX: " + c_val + hex_pad(ep->ContextRecord->Rax, 18) + c_gry + " RCX: " + c_val + to_hex(ep->ContextRecord->Rcx) + c_rst);
-    lines.push_back(c_gry + "RDX: " + c_val + hex_pad(ep->ContextRecord->Rdx, 18) + c_gry + " RBX: " + c_val + to_hex(ep->ContextRecord->Rbx) + c_rst);
-    lines.push_back(c_gry + "RBP: " + c_val + hex_pad(ep->ContextRecord->Rbp, 18) + c_gry + " RSI: " + c_val + to_hex(ep->ContextRecord->Rsi) + c_rst);
-    lines.push_back(c_gry + "RDI: " + c_val + hex_pad(ep->ContextRecord->Rdi, 18) + c_gry + " EFL: " + c_val + to_hex(ep->ContextRecord->EFlags) + c_rst);
-    lines.push_back(c_gry + "R8 : " + c_val + hex_pad(ep->ContextRecord->R8, 18) + c_gry + " R9 : " + c_val + to_hex(ep->ContextRecord->R9) + c_rst);
-    lines.push_back(c_gry + "R10: " + c_val + hex_pad(ep->ContextRecord->R10, 18) + c_gry + " R11: " + c_val + to_hex(ep->ContextRecord->R11) + c_rst);
-    lines.push_back(c_gry + "R12: " + c_val + hex_pad(ep->ContextRecord->R12, 18) + c_gry + " R13: " + c_val + to_hex(ep->ContextRecord->R13) + c_rst);
-    lines.push_back(c_gry + "R14: " + c_val + hex_pad(ep->ContextRecord->R14, 18) + c_gry + " R15: " + c_val + to_hex(ep->ContextRecord->R15) + c_rst);
+    lines.push_back(c_grey + "RIP: " + c_white + hex_pad(ep->ContextRecord->Rip, 18) + c_grey + " RSP: " + c_white + to_hex(ep->ContextRecord->Rsp) + c_rst);
+    lines.push_back(c_grey + "RAX: " + c_white + hex_pad(ep->ContextRecord->Rax, 18) + c_grey + " RCX: " + c_white + to_hex(ep->ContextRecord->Rcx) + c_rst);
+    lines.push_back(c_grey + "RDX: " + c_white + hex_pad(ep->ContextRecord->Rdx, 18) + c_grey + " RBX: " + c_white + to_hex(ep->ContextRecord->Rbx) + c_rst);
+    lines.push_back(c_grey + "RBP: " + c_white + hex_pad(ep->ContextRecord->Rbp, 18) + c_grey + " RSI: " + c_white + to_hex(ep->ContextRecord->Rsi) + c_rst);
+    lines.push_back(c_grey + "RDI: " + c_white + hex_pad(ep->ContextRecord->Rdi, 18) + c_grey + " EFL: " + c_white + to_hex(ep->ContextRecord->EFlags) + c_rst);
+    lines.push_back(c_grey + "R8 : " + c_white + hex_pad(ep->ContextRecord->R8, 18) + c_grey + " R9 : " + c_white + to_hex(ep->ContextRecord->R9) + c_rst);
+    lines.push_back(c_grey + "R10: " + c_white + hex_pad(ep->ContextRecord->R10, 18) + c_grey + " R11: " + c_white + to_hex(ep->ContextRecord->R11) + c_rst);
+    lines.push_back(c_grey + "R12: " + c_white + hex_pad(ep->ContextRecord->R12, 18) + c_grey + " R13: " + c_white + to_hex(ep->ContextRecord->R13) + c_rst);
+    lines.push_back(c_grey + "R14: " + c_white + hex_pad(ep->ContextRecord->R14, 18) + c_grey + " R15: " + c_white + to_hex(ep->ContextRecord->R15) + c_rst);
     lines.push_back("");
-    lines.push_back(c_gry + "CS: " + c_val + hex_pad(ep->ContextRecord->SegCs, 8) + c_gry + " DS: " + c_val + hex_pad(ep->ContextRecord->SegDs, 8) + c_gry + " SS: " + c_val + to_hex(ep->ContextRecord->SegSs) + c_rst);
-    lines.push_back(c_gry + "ES: " + c_val + hex_pad(ep->ContextRecord->SegEs, 8) + c_gry + " FS: " + c_val + hex_pad(ep->ContextRecord->SegFs, 8) + c_gry + " GS: " + c_val + to_hex(ep->ContextRecord->SegGs) + c_rst);
+    lines.push_back(c_grey + "CS: " + c_white + hex_pad(ep->ContextRecord->SegCs, 8) + c_grey + " DS: " + c_white + hex_pad(ep->ContextRecord->SegDs, 8) + c_grey + " SS: " + c_white + to_hex(ep->ContextRecord->SegSs) + c_rst);
+    lines.push_back(c_grey + "ES: " + c_white + hex_pad(ep->ContextRecord->SegEs, 8) + c_grey + " FS: " + c_white + hex_pad(ep->ContextRecord->SegFs, 8) + c_grey + " GS: " + c_white + to_hex(ep->ContextRecord->SegGs) + c_rst);
     lines.push_back("");
-    lines.push_back(c_gry + "Dr0: " + c_val + hex_pad(ep->ContextRecord->Dr0, 18) + c_gry + " Dr1: " + c_val + to_hex(ep->ContextRecord->Dr1) + c_rst);
-    lines.push_back(c_gry + "Dr2: " + c_val + hex_pad(ep->ContextRecord->Dr2, 18) + c_gry + " Dr3: " + c_val + to_hex(ep->ContextRecord->Dr3) + c_rst);
-    lines.push_back(c_gry + "Dr6: " + c_val + hex_pad(ep->ContextRecord->Dr6, 18) + c_gry + " Dr7: " + c_val + to_hex(ep->ContextRecord->Dr7) + c_rst);
+    lines.push_back(c_grey + "Dr0: " + c_white + hex_pad(ep->ContextRecord->Dr0, 18) + c_grey + " Dr1: " + c_white + to_hex(ep->ContextRecord->Dr1) + c_rst);
+    lines.push_back(c_grey + "Dr2: " + c_white + hex_pad(ep->ContextRecord->Dr2, 18) + c_grey + " Dr3: " + c_white + to_hex(ep->ContextRecord->Dr3) + c_rst);
+    lines.push_back(c_grey + "Dr6: " + c_white + hex_pad(ep->ContextRecord->Dr6, 18) + c_grey + " Dr7: " + c_white + to_hex(ep->ContextRecord->Dr7) + c_rst);
     lines.push_back("");
-    lines.push_back(c_gry + "ContextFlags: " + c_val + hex_pad(ep->ContextRecord->ContextFlags, 10) + c_gry + " MxCsr: " + c_val + to_hex(ep->ContextRecord->MxCsr) + c_rst);
-    lines.push_back(c_gry + "DebugControl: " + c_val + to_hex(ep->ContextRecord->DebugControl) + c_rst);
+    lines.push_back(c_grey + "ContextFlags: " + c_white + hex_pad(ep->ContextRecord->ContextFlags, 10) + c_grey + " MxCsr: " + c_white + to_hex(ep->ContextRecord->MxCsr) + c_rst);
+    lines.push_back(c_grey + "DebugControl: " + c_white + to_hex(ep->ContextRecord->DebugControl) + c_rst);
 #else
-    lines.push_back(c_gry + "EIP: " + c_val + hex_pad(ep->ContextRecord->Eip, 10) + c_gry + " ESP: " + c_val + to_hex(ep->ContextRecord->Esp) + c_rst);
-    lines.push_back(c_gry + "EAX: " + c_val + hex_pad(ep->ContextRecord->Eax, 10) + c_gry + " ECX: " + c_val + to_hex(ep->ContextRecord->Ecx) + c_rst);
-    lines.push_back(c_gry + "EDX: " + c_val + hex_pad(ep->ContextRecord->Edx, 10) + c_gry + " EBX: " + c_val + to_hex(ep->ContextRecord->Ebx) + c_rst);
-    lines.push_back(c_gry + "EBP: " + c_val + hex_pad(ep->ContextRecord->Ebp, 10) + c_gry + " ESI: " + c_val + to_hex(ep->ContextRecord->Esi) + c_rst);
-    lines.push_back(c_gry + "EDI: " + c_val + hex_pad(ep->ContextRecord->Edi, 10) + c_gry + " EFL: " + c_val + to_hex(ep->ContextRecord->EFlags) + c_rst);
+    lines.push_back(c_grey + "EIP: " + c_white + hex_pad(ep->ContextRecord->Eip, 10) + c_grey + " ESP: " + c_white + to_hex(ep->ContextRecord->Esp) + c_rst);
+    lines.push_back(c_grey + "EAX: " + c_white + hex_pad(ep->ContextRecord->Eax, 10) + c_grey + " ECX: " + c_white + to_hex(ep->ContextRecord->Ecx) + c_rst);
+    lines.push_back(c_grey + "EDX: " + c_white + hex_pad(ep->ContextRecord->Edx, 10) + c_grey + " EBX: " + c_white + to_hex(ep->ContextRecord->Ebx) + c_rst);
+    lines.push_back(c_grey + "EBP: " + c_white + hex_pad(ep->ContextRecord->Ebp, 10) + c_grey + " ESI: " + c_white + to_hex(ep->ContextRecord->Esi) + c_rst);
+    lines.push_back(c_grey + "EDI: " + c_white + hex_pad(ep->ContextRecord->Edi, 10) + c_grey + " EFL: " + c_white + to_hex(ep->ContextRecord->EFlags) + c_rst);
 #endif
 
     g_tui.addException(lines);
