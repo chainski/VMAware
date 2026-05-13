@@ -115,7 +115,7 @@ else()
 endif()
 
 # add executable
-file(GLOB CLI_SOURCES "src/cli/*.cpp")
+file(GLOB CLI_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/cli/*.cpp")
 add_executable(${TARGET} ${CLI_SOURCES})
 set_property(TARGET ${TARGET} PROPERTY CXX_STANDARD ${CMAKE_CXX_STANDARD})
 
