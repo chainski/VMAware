@@ -174,14 +174,40 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    static const std::array<std::pair<const char*, arg_enum>, 32> table{ {
-        { "-h", HELP }, { "-v", VERSION }, { "-a", ALL }, { "-d", DETECT }, { "-s", STDOUT }, { "-b", BRAND },
-        { "-p", PERCENT }, { "-c", CONCLUSION }, { "-l", BRAND_LIST }, { "-n", NUMBER }, { "-t", TYPE }, { "-o", OUTPUT },
-        { "help", HELP }, { "--help", HELP }, { "--version", VERSION }, { "--all", ALL }, { "--detect", DETECT },
-        { "--stdout", STDOUT }, { "--brand", BRAND }, { "--percent", PERCENT }, { "--conclusion", CONCLUSION },
-        { "--brand-list", BRAND_LIST }, { "--number", NUMBER }, { "--type", TYPE }, { "--disable-notes", NOTES },
-        { "--high-threshold", HIGH_THRESHOLD }, { "--dynamic", DYNAMIC }, { "--verbose", VERBOSE }, { "--enums", ENUMS },
-        { "--no-ansi", NO_ANSI }, { "--detected-only", DETECTED_ONLY }, { "--json", JSON }
+    static const std::array<std::pair<const char*, arg_enum>, 33> table{ {
+        { "-h", HELP }, 
+        { "-v", VERSION }, 
+        { "-a", ALL }, 
+        { "-d", DETECT }, 
+        { "-s", STDOUT }, 
+        { "-b", BRAND },
+        { "-p", PERCENT }, 
+        { "-c", CONCLUSION }, 
+        { "-l", BRAND_LIST }, 
+        { "-n", NUMBER }, 
+        { "-t", TYPE }, 
+        { "-o", OUTPUT },
+        { "help", HELP }, 
+        { "--help", HELP }, 
+        { "--version", VERSION }, 
+        { "--all", ALL }, 
+        { "--detect", DETECT },
+        { "--stdout", STDOUT }, 
+        { "--brand", BRAND }, 
+        { "--percent", PERCENT }, 
+        { "--conclusion", CONCLUSION },
+        { "--brand-list", BRAND_LIST }, 
+        { "--number", NUMBER }, 
+        { "--type", TYPE }, 
+        { "--disable-notes", NOTES },
+        { "--high-threshold", HIGH_THRESHOLD },
+        { "--dynamic", DYNAMIC }, 
+        { "--verbose", VERBOSE }, 
+        { "--enums", ENUMS },
+        { "--no-ansi", NO_ANSI }, 
+        { "--detected-only", DETECTED_ONLY }, 
+        { "--json", JSON }, 
+        { "--output", OUTPUT }
     } };
 
     std::string potential_null_arg;
