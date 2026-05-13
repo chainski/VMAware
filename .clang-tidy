@@ -16,6 +16,7 @@ Checks: >
     -readability-enum-initial-value,
     -readability-container-contains,
     -readability-container-data-pointer,
+    -readability-use-anyofallof,
     clang-analyzer-*,
     bugprone-*,
     -bugprone-easily-swappable-parameters,

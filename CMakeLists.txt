@@ -93,7 +93,7 @@ if(CLANG_TIDY_EXECUTABLE)
                 -p ${CMAKE_BINARY_DIR}
                 --header-filter=".*/src/.*"
                 --fix
-                ${CMAKE_SOURCE_DIR}/src/cli.cpp
+                ${CLI_SOURCES}
             COMMENT "Running clang-tidy"
             VERBATIM
         )
@@ -115,7 +115,8 @@ else()
 endif()
 
 # add executable
-add_executable(${TARGET} "src/cli.cpp")
+file(GLOB CLI_SOURCES "src/cli/*.cpp")
+add_executable(${TARGET} ${CLI_SOURCES})
 set_property(TARGET ${TARGET} PROPERTY CXX_STANDARD ${CMAKE_CXX_STANDARD})
 
 # debug/release flags (MULTI-CONFIG SAFE)
