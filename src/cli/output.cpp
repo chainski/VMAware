@@ -313,11 +313,16 @@ bool parse_disable_token(const char* token) {
     }
 
     for (const auto& name : names) {
-        auto [found, flag] = string_to_technique(name);
+        std::pair<bool, VM::enum_flags> technique = string_to_technique(name);
+        
+        const bool found = technique.first;
+        const VM::enum_flags flag = technique.second;
+
         if (!found) {
             std::cerr << "Unknown technique \"" << name << "\", aborting\n";
             return false;
         }
+
         VM::disabled_techniques.push_back(flag);
     }
 
