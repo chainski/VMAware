@@ -4,6 +4,8 @@
 
 #if (CLI_WINDOWS)
 
+TuiManager g_tui;
+
 bool TuiManager::updateBoxWidth(size_t incoming_len) {
     // Enforce safe boundary so it never line-wraps out of bounds
     size_t max_allowed = static_cast<size_t>(console_width - right_x - 22);

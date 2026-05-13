@@ -337,8 +337,7 @@ void generate_json(const char* output) {
 
     if (VM::detect()) {
         json.emplace_back("true,");
-    }
-    else {
+    } else {
         json.emplace_back("false,");
     }
 

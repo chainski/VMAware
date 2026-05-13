@@ -157,7 +157,7 @@ public:
     void finalize();
 };
 
-inline TuiManager g_tui;
+extern TuiManager g_tui;
 
 // Aggressive stream interceptor. ALL output sent through std::cout that doesn't explicitly bypass
 // into g_tui.raw_out gets captured and sent to the Debug Log UI. No layout escapes possible.
