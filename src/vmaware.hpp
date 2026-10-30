@@ -6148,7 +6148,7 @@ public:
             else {
                 if (!is_root_partition()) {
                     if (eax() == 11 && is_hyperv_present()) {
-                        vma_debug("HYPER-X: Detected Hyper-V guest VM");
+                        vma_debug("HYPER-X: Detected Hyper-V guest VM or Windows Sandbox");
                         core::add(brand_enum::HYPERV);
                         state = HYPERV_REAL_VM;
                     }
@@ -13258,13 +13258,15 @@ public:
                         *ctx->hypervisor_caught = true;
                     }
                 }
+                else {
+                    if (util::hyper_x() != HYPERV_UNKNOWN) {
+                        vma_debug("TRAP: L0 hypervisor with #DB interception disabled present");
+                        *ctx->hypervisor_caught = true;
+                    }
+                }
 
-                /* Clear Trap Flag to stop single-stepping */
                 info->ContextRecord->EFlags &= ~0x100;
-
-                /* Clear DR7 Local Enable 0 to disable the hardware breakpoint */
                 info->ContextRecord->Dr7 &= ~1;
-
                 info->ContextRecord->Dr6 = 0;
 
                 return EXCEPTION_CONTINUE_EXECUTION;
