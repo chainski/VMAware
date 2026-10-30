@@ -18592,7 +18592,7 @@ std::array<VM::core::technique, VM::enum_size + 1> VM::core::technique_table = [
             {VM::EMULATION, {100, VM::emulation}},
             {VM::DLL, {50, VM::dll}},
             {VM::DISPLAY, {25, VM::display}},
-            {VM::VIRTUAL_REGISTRY, {90, VM::virtual_registry}},
+            {VM::VIRTUAL_REGISTRY, {100, VM::virtual_registry}},
             {VM::MUTEX, {100, VM::mutex}},
             {VM::VPC_INVALID, {75, VM::vpc_invalid}},
             {VM::VMWARE_STR, {35, VM::vmware_str}},
