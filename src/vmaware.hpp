@@ -11085,14 +11085,14 @@ public:
         }
 
         constexpr const char* function_names[] = {
-        "RtlInitUnicodeString",
-        "NtOpenFile",
-        "NtDeviceIoControlFile",
-        "NtAllocateVirtualMemory",
-        "NtFreeVirtualMemory",
-        "NtClose",
-        "NtWaitForSingleObject",
-        "NtCancelIoFileEx"
+            "RtlInitUnicodeString",
+            "NtOpenFile",
+            "NtDeviceIoControlFile",
+            "NtAllocateVirtualMemory",
+            "NtFreeVirtualMemory",
+            "NtClose",
+            "NtWaitForSingleObject",
+            "NtCancelIoFileEx"
         };
         void* functions[ARRAYSIZE(function_names)] = {};
         memory::get_function(ntdll, function_names, functions, ARRAYSIZE(function_names));
