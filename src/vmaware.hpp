@@ -11019,7 +11019,7 @@ public:
             return (string::to_lower(str[0]) == 'q' &&
                 string::to_lower(str[1]) == 'm' &&
                 str[2] == '0' && str[3] == '0' && str[4] == '0' && str[5] == '0');
-            };
+        };
 
         /*
          * Helper to detect VirtualBox instances
@@ -11085,13 +11085,14 @@ public:
         }
 
         constexpr const char* function_names[] = {
-            "RtlInitUnicodeString",
-            "NtOpenFile",
-            "NtDeviceIoControlFile",
-            "NtAllocateVirtualMemory",
-            "NtFreeVirtualMemory",
-            "NtClose",
-            "NtWaitForSingleObject"
+        "RtlInitUnicodeString",
+        "NtOpenFile",
+        "NtDeviceIoControlFile",
+        "NtAllocateVirtualMemory",
+        "NtFreeVirtualMemory",
+        "NtClose",
+        "NtWaitForSingleObject",
+        "NtCancelIoFileEx"
         };
         void* functions[ARRAYSIZE(function_names)] = {};
         memory::get_function(ntdll, function_names, functions, ARRAYSIZE(function_names));
@@ -11103,6 +11104,7 @@ public:
         using ntclose_fn = NTSTATUS(__stdcall*)(HANDLE);
         using rtl_init_unicode_string_fn = void(__stdcall*)(PUNICODE_STRING, PCWSTR);
         using nt_wait_for_single_object_fn = NTSTATUS(__stdcall*)(HANDLE, BOOLEAN, PLARGE_INTEGER);
+        using nt_cancel_io_file_ex_fn = NTSTATUS(__stdcall*)(HANDLE, PIO_STATUS_BLOCK, PIO_STATUS_BLOCK);
 
         const auto rtl_init_unicode_string = reinterpret_cast<rtl_init_unicode_string_fn>(functions[0]);
         const auto nt_open_file = reinterpret_cast<ntopenfile_fn>(functions[1]);
@@ -11111,10 +11113,11 @@ public:
         const auto nt_free_virtual_memory = reinterpret_cast<nt_free_virtual_memory_fn>(functions[4]);
         const auto nt_close = reinterpret_cast<ntclose_fn>(functions[5]);
         const auto nt_wait_for_single_object = reinterpret_cast<nt_wait_for_single_object_fn>(functions[6]);
+        const auto nt_cancel_io_file_ex = reinterpret_cast<nt_cancel_io_file_ex_fn>(functions[7]);
 
         if (!rtl_init_unicode_string || !nt_open_file || !nt_device_io_control_file ||
             !nt_allocate_virtual_memory || !nt_free_virtual_memory || !nt_close ||
-            !nt_wait_for_single_object) {
+            !nt_wait_for_single_object || !nt_cancel_io_file_ex) {
             return result;
         }
 
@@ -11195,14 +11198,23 @@ public:
                     allocation_base, static_cast<ULONG>(total_size),
                     allocation_base, static_cast<ULONG>(total_size));
 
-                /* If STATUS_PENDING wait fails */
+                /* If STATUS_PENDING, wait for completion or drain on failure */
                 if (query_status == static_cast<NTSTATUS>(0x00000103L)) {
                     const NTSTATUS wait_status = nt_wait_for_single_object(dev, FALSE, nullptr);
                     if (NT_SUCCESS(wait_status)) {
                         query_status = query_iosb.Status;
                     }
                     else {
-                        query_status = static_cast<NTSTATUS>(0xC0000001L); /* STATUS_UNSUCCESSFUL */
+                        /*
+                         * If wait fails, cancel the in-flight IRP to prevent the driver
+                         * from writing to stack_query_buf or query_iosb after this scope exits
+                         */
+                        if (nt_cancel_io_file_ex) {
+                            IO_STATUS_BLOCK cancel_iosb{};
+                            nt_cancel_io_file_ex(dev, &query_iosb, &cancel_iosb);
+                            nt_wait_for_single_object(dev, FALSE, nullptr);
+                        }
+                        query_status = static_cast<NTSTATUS>(0xC0000001L);
                     }
                 }
 
@@ -11294,7 +11306,7 @@ public:
             BYTE identify_ns[4096];
             RtlZeroMemory(identify_ns, sizeof(identify_ns));
             if (query_protocol(StorageAdapterProtocolSpecificProperty, 1, 0x00, 1, identify_ns, sizeof(identify_ns))) {
-                /* #26: EUI64 auto-generated from NVME_EUI64_DEFAULT (0x5254000000000000) */
+                /* EUI64 auto-generated from NVME_EUI64_DEFAULT (0x5254000000000000) */
                 const u8 eui0 = identify_ns[120];
                 const u8 eui1 = identify_ns[121];
                 const u8 eui2 = identify_ns[122];
@@ -11385,12 +11397,24 @@ public:
                 }
             }
 
+            struct storage_descriptor_header {
+                DWORD Version;
+                DWORD Size;
+            };
+            constexpr size_t header_min_size = sizeof(storage_descriptor_header); // 8 bytes
+
             BYTE* allocated_buffer = nullptr;
             SIZE_T allocated_size = 0;
 
-            const bool has_initial_descriptor = (iosb.Information >= sizeof(STORAGE_DEVICE_DESCRIPTOR));
+            const bool has_header = (iosb.Information >= header_min_size);
             const bool is_overflow = (st == static_cast<NTSTATUS>(0x80000005L));
-            const bool need_realloc = has_initial_descriptor && (
+
+            /*
+             * Reallocate if:
+             * Driver returned STATUS_BUFFER_OVERFLOW and populated the 8-byte header Size
+             * Driver returned NT_SUCCESS, but the reported size exceeds our 1024 stack buffer
+             */
+            const bool need_realloc = has_header && (
                 (is_overflow && descriptor->Size >= sizeof(STORAGE_DEVICE_DESCRIPTOR)) ||
                 (NT_SUCCESS(st) && descriptor->Size > sizeof(stack_buffer))
             );
@@ -11412,15 +11436,23 @@ public:
 
                     iosb = {};
                     st = nt_device_io_control_file(device, nullptr, nullptr, nullptr, &iosb, ioctl, &query, sizeof(query), allocated_buffer, static_cast<ULONG>(allocated_size));
+
                     if (st == static_cast<NTSTATUS>(0x00000103L)) {
                         const NTSTATUS wait_status = nt_wait_for_single_object(device, FALSE, nullptr);
                         if (NT_SUCCESS(wait_status)) {
                             st = iosb.Status;
                         }
                         else {
+                            /* To avoid dangling write before free */
+                            if (nt_cancel_io_file_ex) {
+                                IO_STATUS_BLOCK cancel_iosb{};
+                                nt_cancel_io_file_ex(device, &iosb, &cancel_iosb);
+                                nt_wait_for_single_object(device, FALSE, nullptr);
+                            }
                             st = static_cast<NTSTATUS>(0xC0000001L);
                         }
                     }
+
                     if (!NT_SUCCESS(st)) {
                         PVOID free_base = reinterpret_cast<PVOID>(allocated_buffer);
                         SIZE_T free_size = 0;
@@ -11550,42 +11582,37 @@ public:
                 string::starts_with(name, "sg") ||
                 string::starts_with(name, "hd") ||
                 string::starts_with(name, "vd")) {
+
                 const char sys_block_str[] = "/sys/block/";
-                const char device_serial_str[] = "/device/serial";
-
                 char buf[512];
-                int written = snprintf(buf, sizeof(buf), "%s%s%s", sys_block_str, name, device_serial_str);
-                if (written < 0 || static_cast<size_t>(written) >= sizeof(buf)) {
-                    continue;
+
+                /* Evaluate device serial */
+                int written = snprintf(buf, sizeof(buf), "%s%s/device/serial", sys_block_str, name);
+                if (written > 0 && static_cast<size_t>(written) < sizeof(buf)) {
+                    const int fd = open(buf, O_RDONLY);
+                    if (fd >= 0) {
+                        char serial[1024];
+                        const ssize_t rsize = read(fd, serial, sizeof(serial) - 1);
+                        close(fd);
+
+                        if (rsize > 0) {
+                            serial[static_cast<size_t>(rsize)] = '\0';
+                            size_t valid_len = static_cast<size_t>(rsize);
+                            while (valid_len > 0 && (serial[valid_len - 1] == '\n' || serial[valid_len - 1] == '\r' || serial[valid_len - 1] == ' ')) {
+                                serial[--valid_len] = '\0';
+                            }
+
+                            vma_debug("DISK: ", static_cast<const char*>(serial));
+                            if (is_qemu_serial(serial, valid_len) || is_vbox_serial(serial, valid_len)) {
+                                result = true;
+                                break;
+                            }
+                        }
+                    }
                 }
 
-                const int fd = open(buf, O_RDONLY);
-                if (fd < 0) {
-                    continue;
-                }
-
-                char serial[1024];
-                const ssize_t rsize = read(fd, serial, sizeof(serial) - 1);
-                close(fd);
-                if (rsize <= 0) {
-                    continue;
-                }
-
-                serial[static_cast<size_t>(rsize)] = '\0';
-                size_t valid_len = static_cast<size_t>(rsize);
-                while (valid_len > 0 && (serial[valid_len - 1] == '\n' || serial[valid_len - 1] == '\r' || serial[valid_len - 1] == ' ')) {
-                    serial[--valid_len] = '\0';
-                }
-
-                vma_debug("DISK: ", static_cast<const char*>(serial));
-                if (is_qemu_serial(serial, valid_len) || is_vbox_serial(serial, valid_len)) {
-                    result = true;
-                    break;
-                }
-
-                /* Check SUBNQN sysfs attribute for QEMU domain */
-                const char subsysnqn_str[] = "/device/subsysnqn";
-                written = snprintf(buf, sizeof(buf), "%s%s%s", sys_block_str, name, subsysnqn_str);
+                /* SUBNQN sysfs attribute for QEMU domain (evaluated even if serial is missing) */
+                written = snprintf(buf, sizeof(buf), "%s%s/device/subsysnqn", sys_block_str, name);
                 if (written > 0 && static_cast<size_t>(written) < sizeof(buf)) {
                     const int nqn_fd = open(buf, O_RDONLY);
                     if (nqn_fd >= 0) {
@@ -11603,9 +11630,8 @@ public:
                     }
                 }
 
-                /* Check EUI-64/WWID sysfs attribute for QEMU OUI prefix */
-                const char wwid_str[] = "/device/wwid";
-                written = snprintf(buf, sizeof(buf), "%s%s%s", sys_block_str, name, wwid_str);
+                /* EUI-64/WWID sysfs attribute for QEMU OUI prefix */
+                written = snprintf(buf, sizeof(buf), "%s%s/device/wwid", sys_block_str, name);
                 if (written > 0 && static_cast<size_t>(written) < sizeof(buf)) {
                     const int wwid_fd = open(buf, O_RDONLY);
                     if (wwid_fd >= 0) {
