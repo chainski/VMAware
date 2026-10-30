@@ -11019,7 +11019,7 @@ public:
             return (string::to_lower(str[0]) == 'q' &&
                 string::to_lower(str[1]) == 'm' &&
                 str[2] == '0' && str[3] == '0' && str[4] == '0' && str[5] == '0');
-        };
+            };
 
         /*
          * Helper to detect VirtualBox instances
@@ -11258,12 +11258,52 @@ public:
                     vma_debug("DISK: Virtual OACS signature detected");
                     return true;
                 }
+
+                /* SUBNQN contains QEMU reverse domain authority (ctrl.c / subsys.c) */
+                char subnqn[256]{};
+                std::memcpy(subnqn, &identify_ctrl[768], sizeof(subnqn) - 1);
+                subnqn[sizeof(subnqn) - 1] = '\0';
+                if (std::strstr(subnqn, "org.qemu") != nullptr) {
+                    vma_debug("DISK: QEMU SUBNQN signature detected");
+                    return core::add(brand_enum::QEMU);
+                }
+
+                /* IEEE OUI registered to QEMU (00:54:52 or byte-swapped 52:54:00) */
+                const u8 oui0 = identify_ctrl[73];
+                const u8 oui1 = identify_ctrl[74];
+                const u8 oui2 = identify_ctrl[75];
+                if ((oui0 == 0x00 && oui1 == 0x54 && oui2 == 0x52) ||
+                    (oui0 == 0x52 && oui1 == 0x54 && oui2 == 0x00)) {
+                    vma_debug("DISK: QEMU IEEE OUI signature detected");
+                    return core::add(brand_enum::QEMU);
+                }
+
+                /* Firmware-slot log frs1 = "1.0", contradicting Identify fr */
+                BYTE fw_log[512]{};
+                if (query_protocol(StorageAdapterProtocolSpecificProperty, 2 /* NVMeDataTypeLogPage */, 0x03 /* LID 03h: Firmware Slot Info */, 0, fw_log, sizeof(fw_log))) {
+                    const bool frs1_is_default = (fw_log[8] == '1' && fw_log[9] == '.' && fw_log[10] == '0');
+                    const bool fr_mismatch = (std::memcmp(&fw_log[8], &identify_ctrl[64], 8) != 0);
+                    if (frs1_is_default && fr_mismatch) {
+                        vma_debug("DISK: NVMe firmware slot log frs1 contradicts Identify fr");
+                        return core::add(brand_enum::QEMU);
+                    }
+                }
             }
 
             /* Verify if the drive supports exactly 8 formats containing metadata, enabled logical sectors */
             BYTE identify_ns[4096];
             RtlZeroMemory(identify_ns, sizeof(identify_ns));
             if (query_protocol(StorageAdapterProtocolSpecificProperty, 1, 0x00, 1, identify_ns, sizeof(identify_ns))) {
+                /* #26: EUI64 auto-generated from NVME_EUI64_DEFAULT (0x5254000000000000) */
+                const u8 eui0 = identify_ns[120];
+                const u8 eui1 = identify_ns[121];
+                const u8 eui2 = identify_ns[122];
+                if ((eui0 == 0x52 && eui1 == 0x54 && eui2 == 0x00) ||
+                    (eui0 == 0x00 && eui1 == 0x54 && eui2 == 0x52)) {
+                    vma_debug("DISK: QEMU namespace EUI64 signature detected");
+                    return core::add(brand_enum::QEMU);
+                }
+
                 const u8 nlbaf = identify_ns[25]; /* Number of LBA Formats (0 - based) */
                 if (nlbaf == 7) { /* 8 available formats */
                     bool has_metadata_option = false;
@@ -11541,6 +11581,46 @@ public:
                 if (is_qemu_serial(serial, valid_len) || is_vbox_serial(serial, valid_len)) {
                     result = true;
                     break;
+                }
+
+                /* Check SUBNQN sysfs attribute for QEMU domain */
+                const char subsysnqn_str[] = "/device/subsysnqn";
+                written = snprintf(buf, sizeof(buf), "%s%s%s", sys_block_str, name, subsysnqn_str);
+                if (written > 0 && static_cast<size_t>(written) < sizeof(buf)) {
+                    const int nqn_fd = open(buf, O_RDONLY);
+                    if (nqn_fd >= 0) {
+                        char nqn[256];
+                        const ssize_t nqn_rsize = read(nqn_fd, nqn, sizeof(nqn) - 1);
+                        close(nqn_fd);
+                        if (nqn_rsize > 0) {
+                            nqn[nqn_rsize] = '\0';
+                            if (std::strstr(nqn, "org.qemu") != nullptr) {
+                                vma_debug("DISK: QEMU SUBNQN detected");
+                                result = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                /* Check EUI-64/WWID sysfs attribute for QEMU OUI prefix */
+                const char wwid_str[] = "/device/wwid";
+                written = snprintf(buf, sizeof(buf), "%s%s%s", sys_block_str, name, wwid_str);
+                if (written > 0 && static_cast<size_t>(written) < sizeof(buf)) {
+                    const int wwid_fd = open(buf, O_RDONLY);
+                    if (wwid_fd >= 0) {
+                        char wwid[256];
+                        const ssize_t wwid_rsize = read(wwid_fd, wwid, sizeof(wwid) - 1);
+                        close(wwid_fd);
+                        if (wwid_rsize > 0) {
+                            wwid[wwid_rsize] = '\0';
+                            if (std::strstr(wwid, "eui.525400") != nullptr) {
+                                vma_debug("DISK: QEMU namespace EUI64 detected");
+                                result = true;
+                                break;
+                            }
+                        }
+                    }
                 }
             }
         }
